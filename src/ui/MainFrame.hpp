@@ -6,7 +6,7 @@
 #include <wx/wx.h>
 #include <wx/notebook.h>
 #include "../core/DataStore.hpp"
-#include "version.h"
+#include <version.h>
 
 namespace mc::ui {
 

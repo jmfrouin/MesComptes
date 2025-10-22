@@ -62,14 +62,14 @@ void MainFrame::create_status_bar() {
     CreateStatusBar(2);
     SetStatusText("Prêt", 0);
     SetStatusText(wxString::Format("Version %d.%d.%d", 
-        VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH), 1);
+        MC_VERSION_MAJOR, MC_VERSION_MINOR, MC_VERSION_PATCH), 1);
 }
 
 void MainFrame::on_about(wxCommandEvent& event) {
     wxAboutDialogInfo info;
     info.SetName("Mes Comptes");
     info.SetVersion(wxString::Format("%d.%d.%d (build %d)",
-        VERSION_MAJOR, VERSION_MINOR, VERSION_PATCH, BUILD_NUMBER));
+        MC_VERSION_MAJOR, MC_VERSION_MINOR, MC_VERSION_PATCH));
     info.SetDescription("Application de gestion de comptes personnels");
     info.SetCopyright("(C) 2025");
     info.AddDeveloper("Jean-Michel Frouin");
