@@ -3,15 +3,13 @@
 //
 
 #include "HomePage.hpp"
-#include "db/dao/AccountDAO.hpp"
-#include "db/dao/TxnDAO.hpp"
 #include <wx/sizer.h>
 #include <wx/statbox.h>
 
 namespace mc::ui {
 
-HomePage::HomePage(wxWindow* parent, mc::db::SqliteDB& db)
-    : wxPanel(parent), db_(db) {
+HomePage::HomePage(wxWindow* parent, mc::core::DataStore& store)
+    : wxPanel(parent), store_(store) {
     create_ui();
     refresh_stats();
 }
@@ -53,19 +51,12 @@ void HomePage::create_ui() {
 }
 
 void HomePage::refresh_stats() {
-    db::dao::AccountDAO account_dao(db_);
-    db::dao::TxnDAO txn_dao(db_);
-
-    auto accounts = account_dao.find_all();
+    auto accounts = store_.get_all_accounts();
     account_count_text_->SetLabelText(
         wxString::Format("Nombre de comptes: %zu", accounts.size())
     );
 
-    int64_t total_balance = 0;
-    for (const auto& account : accounts) {
-        total_balance += account_dao.get_balance(account.id);
-    }
-
+    double total_balance = store_.get_total_balance();
     total_balance_text_->SetLabelText(
         "Solde total: " + format_currency(total_balance)
     );
@@ -74,8 +65,8 @@ void HomePage::refresh_stats() {
     last_update_text_->SetLabelText("Dernière mise à jour: Aujourd'hui");
 }
 
-wxString HomePage::format_currency(int64_t cents) {
-    double euros = cents / 100.0;
+wxString HomePage::format_currency(double amount) {
+    double euros = amount / 100.0;
     return wxString::Format("%.2f €", euros);
 }
 

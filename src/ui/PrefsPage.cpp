@@ -3,7 +3,6 @@
 //
 
 #include "PrefsPage.hpp"
-#include "db/dao/TypeDAO.hpp"
 #include <wx/sizer.h>
 #include <wx/statbox.h>
 
@@ -16,10 +15,10 @@ enum {
     ID_TypeList
 };
 
-PrefsPage::PrefsPage(wxWindow* parent, mc::db::SqliteDB& db)
-    : wxPanel(parent), db_(db) {
+PrefsPage::PrefsPage(wxWindow* parent, mc::core::DataStore& store)
+    : wxPanel(parent), store_(store) {
     create_ui();
-    refresh_types();
+    Bind(wxEVT_SHOW, &PrefsPage::on_show, this);
 }
 
 void PrefsPage::create_ui() {
@@ -67,11 +66,23 @@ void PrefsPage::create_ui() {
     Bind(wxEVT_LIST_ITEM_ACTIVATED, &PrefsPage::on_type_activated, this, ID_TypeList);
 }
 
+void PrefsPage::on_show(wxShowEvent& event) {
+    event.Skip();
+    
+    if (event.IsShown() && !is_initialized_) {
+        initialize_data();
+        is_initialized_ = true;
+    }
+}
+
+void PrefsPage::initialize_data() {
+    refresh_types();
+}
+
 void PrefsPage::refresh_types() {
     type_list_->DeleteAllItems();
 
-    db::dao::TypeDAO type_dao(db_);
-    types_ = type_dao.find_all();
+    types_ = store_.get_all_types();
 
     for (size_t i = 0; i < types_.size(); ++i) {
         const auto& type = types_[i];
@@ -91,9 +102,8 @@ void PrefsPage::on_add_type(wxCommandEvent& WXUNUSED(event)) {
         }
 
         core::Type type(name.ToStdString());
-        db::dao::TypeDAO type_dao(db_);
-
-        int64_t id = type_dao.insert(type);
+        int64_t id = store_.add_type(type);
+        
         if (id > 0) {
             refresh_types();
         } else {
@@ -125,8 +135,7 @@ void PrefsPage::on_edit_type(wxCommandEvent& WXUNUSED(event)) {
             core::Type updated_type = type;
             updated_type.name = name.ToStdString();
 
-            db::dao::TypeDAO type_dao(db_);
-            if (type_dao.update(updated_type)) {
+            if (store_.update_type(updated_type)) {
                 refresh_types();
             } else {
                 wxMessageBox("Impossible de modifier le type", "Erreur", wxOK | wxICON_ERROR);
@@ -150,15 +159,13 @@ void PrefsPage::on_delete_type(wxCommandEvent& WXUNUSED(event)) {
             "Confirmation", wxYES_NO | wxICON_QUESTION);
 
         if (answer == wxYES) {
-            db::dao::TypeDAO type_dao(db_);
-
-            if (type_dao.is_used(type.id)) {
+            if (store_.is_type_used(type.id)) {
                 wxMessageBox("Ce type est utilisé par des transactions et ne peut pas être supprimé",
                             "Erreur", wxOK | wxICON_ERROR);
                 return;
             }
 
-            if (type_dao.remove(type.id)) {
+            if (store_.remove_type(type.id)) {
                 refresh_types();
             } else {
                 wxMessageBox("Impossible de supprimer le type", "Erreur", wxOK | wxICON_ERROR);

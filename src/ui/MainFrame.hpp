@@ -5,17 +5,17 @@
 #pragma once
 #include <wx/wx.h>
 #include <wx/notebook.h>
-#include "db/SqliteDB.hpp"
+#include "../core/DataStore.hpp"
 #include "version.h"
 
 namespace mc::ui {
 
 class MainFrame : public wxFrame {
 public:
-    explicit MainFrame(mc::db::SqliteDB& db);
+    explicit MainFrame(mc::core::DataStore& store);
 
 private:
-    mc::db::SqliteDB& db_;
+    mc::core::DataStore& store_;
     wxNotebook* notebook_;
 
     void create_menu_bar();

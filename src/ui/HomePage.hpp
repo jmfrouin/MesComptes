@@ -5,25 +5,26 @@
 #pragma once
 #include <wx/wx.h>
 #include <wx/panel.h>
-#include "db/SqliteDB.hpp"
+#include "../core/DataStore.hpp"
 
 namespace mc::ui {
 
 class HomePage : public wxPanel {
 public:
-    HomePage(wxWindow* parent, mc::db::SqliteDB& db);
+    HomePage(wxWindow* parent, mc::core::DataStore& store);
+
+    void refresh_stats();
 
 private:
-    mc::db::SqliteDB& db_;
+    mc::core::DataStore& store_;
 
     wxStaticText* account_count_text_;
     wxStaticText* total_balance_text_;
     wxStaticText* last_update_text_;
 
     void create_ui();
-    void refresh_stats();
 
-    wxString format_currency(int64_t cents);
+    wxString format_currency(double amount);
 };
 
 } // namespace mc::ui

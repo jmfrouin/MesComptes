@@ -4,25 +4,20 @@
 
 #pragma once
 #include <wx/wx.h>
+#include "core/DataStore.hpp"
 #include <memory>
-#include "db/SqliteDB.hpp"
 
-namespace mc::app {
+namespace mc {
 
 class MesComptesApp : public wxApp {
 public:
-    bool OnInit() override;
-    int OnExit() override;
-
-    mc::db::SqliteDB& get_database() { return *db_; }
+    virtual bool OnInit() override;
+    mc::core::DataStore& get_datastore() { return *store_; }
 
 private:
-    std::unique_ptr<mc::db::SqliteDB> db_;
-
-    bool initialize_database();
-    std::string get_database_path();
+    std::unique_ptr<mc::core::DataStore> store_;
 };
 
-} // namespace mc::app
+} // namespace mc
 
-wxDECLARE_APP(mc::app::MesComptesApp);
+wxDECLARE_APP(mc::MesComptesApp);

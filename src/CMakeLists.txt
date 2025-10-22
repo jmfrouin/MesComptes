@@ -4,22 +4,11 @@ set(CORE_HEADERS
         core/Type.hpp
         core/Totals.hpp
         core/Settings.hpp
+        core/DataStore.hpp
 )
 
-set(DB_SOURCES
-        db/SqliteDB.cpp
-        db/Migrations.cpp
-        db/dao/AccountDAO.cpp
-        db/dao/TxnDAO.cpp
-        db/dao/TypeDAO.cpp
-)
-
-set(DB_HEADERS
-        db/SqliteDB.hpp
-        db/Migrations.hpp
-        db/dao/AccountDAO.hpp
-        db/dao/TxnDAO.hpp
-        db/dao/TypeDAO.hpp
+set(CORE_SOURCES
+        core/DataStore.cpp
 )
 
 set(UI_SOURCES
@@ -52,6 +41,7 @@ add_executable(MesComptes
         ${APP_SOURCES}
         ${APP_HEADERS}
         ${CORE_HEADERS}
+        ${CORE_SOURCES}
         ${DB_SOURCES}
         ${DB_HEADERS}
         ${UI_SOURCES}

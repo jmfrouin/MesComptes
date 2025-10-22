@@ -6,49 +6,46 @@
 #include <wx/wx.h>
 #include <wx/panel.h>
 #include <wx/dataview.h>
-#include <wx/spinctrl.h>
-#include "db/SqliteDB.hpp"
+#include <wx/choice.h>
+#include "core/DataStore.hpp"
+#include "core/Account.hpp"
 #include "core/Txn.hpp"
-#include "core/Totals.hpp"
 #include <vector>
 
 namespace mc::ui {
 
 class AccountsPage : public wxPanel {
 public:
-    AccountsPage(wxWindow* parent, mc::db::SqliteDB& db);
+    AccountsPage(wxWindow* parent, mc::core::DataStore& store);
 
 private:
-    mc::db::SqliteDB& db_;
-    int64_t current_account_id_ = 1; // TODO: Gérer la sélection de compte
-
+    mc::core::DataStore& store_;
+    
+    wxChoice* account_choice_;
+    wxStaticText* balance_text_;
     wxDataViewListCtrl* txn_list_;
-    wxStaticText* restant_text_;
-    wxStaticText* somme_pointee_text_;
-    wxSpinCtrlDouble* somme_en_ligne_spin_;
-    wxStaticText* diff_text_;
-
-    std::vector<core::Txn> transactions_;
-    core::Totals totals_;
+    
+    std::vector<core::Account> accounts_;
+    std::vector<core::Txn> current_transactions_;
+    int64_t current_account_id_ = -1;
 
     void create_ui();
-    void create_toolbar(wxBoxSizer* sizer);
-    void create_transaction_list(wxBoxSizer* sizer);
-    void create_totals_bar(wxBoxSizer* sizer);
-
-    void refresh_transactions();
-    void refresh_totals();
-    void update_totals_display();
+    void load_accounts();
+    void load_transactions();
+    void update_balance();
 
     // Event handlers
-    void on_add_transaction(wxCommandEvent& event);
-    void on_edit_transaction(wxCommandEvent& event);
-    void on_delete_transaction(wxCommandEvent& event);
-    void on_toggle_pointed(wxCommandEvent& event);
-    void on_somme_en_ligne_changed(wxSpinDoubleEvent& event);
+    void on_account_selected(wxCommandEvent& event);
+    void on_add_account(wxCommandEvent& event);
+    void on_edit_account(wxCommandEvent& event);
+    void on_delete_account(wxCommandEvent& event);
+    void on_add_txn(wxCommandEvent& event);
+    void on_edit_txn(wxCommandEvent& event);
+    void on_delete_txn(wxCommandEvent& event);
+    void on_import_csv(wxCommandEvent& event);
     void on_txn_activated(wxDataViewEvent& event);
-
-    wxString format_currency(int64_t cents);
+    
+    wxString format_currency(double amount);
     wxString format_date(int64_t timestamp);
 };
 

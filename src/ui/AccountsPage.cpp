@@ -4,255 +4,322 @@
 
 #include "AccountsPage.hpp"
 #include "dialogs/TxnEditDlg.hpp"
-#include "db/dao/TxnDAO.hpp"
-#include "db/dao/TypeDAO.hpp"
+#include "dialogs/ImportCsvDlg.hpp"
 #include <wx/sizer.h>
-#include <wx/toolbar.h>
-#include <chrono>
-#include <iomanip>
-#include <sstream>
+#include <wx/stattext.h>
+#include <wx/button.h>
+#include <wx/msgdlg.h>
+#include <wx/textdlg.h>
+#include <wx/datetime.h>
 
 namespace mc::ui {
 
-enum {
-    ID_AddTxn = wxID_HIGHEST + 1,
-    ID_EditTxn,
-    ID_DeleteTxn,
-    ID_TogglePointed,
-    ID_SommeEnLigne
-};
-
-AccountsPage::AccountsPage(wxWindow* parent, mc::db::SqliteDB& db)
-    : wxPanel(parent), db_(db) {
+AccountsPage::AccountsPage(wxWindow* parent, mc::core::DataStore& store)
+    : wxPanel(parent), store_(store) {
     create_ui();
-    refresh_transactions();
-    refresh_totals();
+    load_accounts();
 }
 
 void AccountsPage::create_ui() {
     auto* main_sizer = new wxBoxSizer(wxVERTICAL);
 
-    create_toolbar(main_sizer);
-    create_transaction_list(main_sizer);
-    create_totals_bar(main_sizer);
+    // Barre de sélection de compte
+    auto* account_bar = new wxBoxSizer(wxHORIZONTAL);
+    account_bar->Add(new wxStaticText(this, wxID_ANY, "Compte:"), 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    
+    account_choice_ = new wxChoice(this, wxID_ANY);
+    account_bar->Add(account_choice_, 1, wxEXPAND | wxRIGHT, 10);
+
+    auto* btn_add_account = new wxButton(this, wxID_ANY, "Nouveau compte");
+    account_bar->Add(btn_add_account, 0, wxRIGHT, 5);
+
+    auto* btn_edit_account = new wxButton(this, wxID_ANY, "Modifier");
+    account_bar->Add(btn_edit_account, 0, wxRIGHT, 5);
+
+    auto* btn_delete_account = new wxButton(this, wxID_ANY, "Supprimer");
+    account_bar->Add(btn_delete_account, 0);
+
+    main_sizer->Add(account_bar, 0, wxALL | wxEXPAND, 5);
+
+    // Solde du compte
+    balance_text_ = new wxStaticText(this, wxID_ANY, "Solde: 0,00 €");
+    wxFont balance_font = balance_text_->GetFont();
+    balance_font.SetPointSize(14);
+    balance_font.SetWeight(wxFONTWEIGHT_BOLD);
+    balance_text_->SetFont(balance_font);
+    main_sizer->Add(balance_text_, 0, wxALL | wxALIGN_CENTER, 10);
+
+    // Liste des transactions
+    txn_list_ = new wxDataViewListCtrl(this, wxID_ANY,
+                                       wxDefaultPosition, wxDefaultSize,
+                                       wxDV_ROW_LINES | wxDV_HORIZ_RULES | wxDV_VERT_RULES);
+    
+    txn_list_->AppendTextColumn("Date", wxDATAVIEW_CELL_INERT, 100);
+    txn_list_->AppendTextColumn("Libellé", wxDATAVIEW_CELL_INERT, 300);
+    txn_list_->AppendTextColumn("Montant", wxDATAVIEW_CELL_INERT, 100);
+    txn_list_->AppendTextColumn("Type", wxDATAVIEW_CELL_INERT, 150);
+    txn_list_->AppendToggleColumn("Pointé", wxDATAVIEW_CELL_ACTIVATABLE, 60);
+
+    main_sizer->Add(txn_list_, 1, wxALL | wxEXPAND, 5);
+
+    // Boutons de gestion des transactions
+    auto* txn_buttons = new wxBoxSizer(wxHORIZONTAL);
+    
+    auto* btn_add_txn = new wxButton(this, wxID_ANY, "Nouvelle transaction");
+    txn_buttons->Add(btn_add_txn, 0, wxRIGHT, 5);
+
+    auto* btn_edit_txn = new wxButton(this, wxID_ANY, "Modifier");
+    txn_buttons->Add(btn_edit_txn, 0, wxRIGHT, 5);
+
+    auto* btn_delete_txn = new wxButton(this, wxID_ANY, "Supprimer");
+    txn_buttons->Add(btn_delete_txn, 0, wxRIGHT, 5);
+
+    auto* btn_import = new wxButton(this, wxID_ANY, "Importer CSV");
+    txn_buttons->Add(btn_import, 0);
+
+    main_sizer->Add(txn_buttons, 0, wxALL | wxALIGN_CENTER, 5);
 
     SetSizer(main_sizer);
 
     // Bind events
-    Bind(wxEVT_BUTTON, &AccountsPage::on_add_transaction, this, ID_AddTxn);
-    Bind(wxEVT_BUTTON, &AccountsPage::on_edit_transaction, this, ID_EditTxn);
-    Bind(wxEVT_BUTTON, &AccountsPage::on_delete_transaction, this, ID_DeleteTxn);
-    Bind(wxEVT_BUTTON, &AccountsPage::on_toggle_pointed, this, ID_TogglePointed);
-    Bind(wxEVT_SPINCTRLDOUBLE, &AccountsPage::on_somme_en_ligne_changed, this, ID_SommeEnLigne);
-}
-
-void AccountsPage::create_toolbar(wxBoxSizer* sizer) {
-    auto* toolbar_sizer = new wxBoxSizer(wxHORIZONTAL);
-
-    auto* btn_add = new wxButton(this, ID_AddTxn, "Ajouter (Ins)");
-    auto* btn_edit = new wxButton(this, ID_EditTxn, "Éditer (Enter)");
-    auto* btn_delete = new wxButton(this, ID_DeleteTxn, "Supprimer (Del)");
-    auto* btn_toggle = new wxButton(this, ID_TogglePointed, "Pointer/Dépointer (Space)");
-
-    toolbar_sizer->Add(btn_add, 0, wxALL, 5);
-    toolbar_sizer->Add(btn_edit, 0, wxALL, 5);
-    toolbar_sizer->Add(btn_delete, 0, wxALL, 5);
-    toolbar_sizer->Add(btn_toggle, 0, wxALL, 5);
-
-    sizer->Add(toolbar_sizer, 0, wxALL | wxEXPAND, 5);
-}
-
-void AccountsPage::create_transaction_list(wxBoxSizer* sizer) {
-    txn_list_ = new wxDataViewListCtrl(this, wxID_ANY,
-        wxDefaultPosition, wxDefaultSize,
-        wxDV_ROW_LINES | wxDV_MULTIPLE | wxDV_VERT_RULES);
-
-    // Colonnes
-    txn_list_->AppendTextColumn("Date", wxDATAVIEW_CELL_INERT, 120);
-    txn_list_->AppendTextColumn("Libellé", wxDATAVIEW_CELL_INERT, 300);
-    txn_list_->AppendTextColumn("Somme", wxDATAVIEW_CELL_INERT, 100);
-    txn_list_->AppendToggleColumn("Pointée", wxDATAVIEW_CELL_ACTIVATABLE, 80);
-    txn_list_->AppendTextColumn("Type", wxDATAVIEW_CELL_INERT, 100);
-
-    sizer->Add(txn_list_, 1, wxALL | wxEXPAND, 5);
-
+    account_choice_->Bind(wxEVT_CHOICE, &AccountsPage::on_account_selected, this);
+    btn_add_account->Bind(wxEVT_BUTTON, &AccountsPage::on_add_account, this);
+    btn_edit_account->Bind(wxEVT_BUTTON, &AccountsPage::on_edit_account, this);
+    btn_delete_account->Bind(wxEVT_BUTTON, &AccountsPage::on_delete_account, this);
+    btn_add_txn->Bind(wxEVT_BUTTON, &AccountsPage::on_add_txn, this);
+    btn_edit_txn->Bind(wxEVT_BUTTON, &AccountsPage::on_edit_txn, this);
+    btn_delete_txn->Bind(wxEVT_BUTTON, &AccountsPage::on_delete_txn, this);
+    btn_import->Bind(wxEVT_BUTTON, &AccountsPage::on_import_csv, this);
     txn_list_->Bind(wxEVT_DATAVIEW_ITEM_ACTIVATED, &AccountsPage::on_txn_activated, this);
 }
 
-void AccountsPage::create_totals_bar(wxBoxSizer* sizer) {
-    auto* totals_sizer = new wxFlexGridSizer(2, 4, 5, 10);
-    totals_sizer->AddGrowableCol(1);
-    totals_sizer->AddGrowableCol(3);
+void AccountsPage::load_accounts() {
+    account_choice_->Clear();
+    accounts_ = store_.get_all_accounts();
 
-    // Restant
-    totals_sizer->Add(new wxStaticText(this, wxID_ANY, "Restant:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
-    restant_text_ = new wxStaticText(this, wxID_ANY, "0,00 €");
-    totals_sizer->Add(restant_text_, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
+    for (const auto& account : accounts_) {
+        account_choice_->Append(account.name, reinterpret_cast<void*>(account.id));
+    }
 
-    // Somme pointée
-    totals_sizer->Add(new wxStaticText(this, wxID_ANY, "Somme pointée:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
-    somme_pointee_text_ = new wxStaticText(this, wxID_ANY, "0,00 €");
-    totals_sizer->Add(somme_pointee_text_, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    // Somme en ligne
-    totals_sizer->Add(new wxStaticText(this, wxID_ANY, "Somme en ligne:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
-    somme_en_ligne_spin_ = new wxSpinCtrlDouble(this, ID_SommeEnLigne, "0.00",
-        wxDefaultPosition, wxSize(150, -1), wxSP_ARROW_KEYS, -999999.99, 999999.99, 0.0, 0.01);
-    totals_sizer->Add(somme_en_ligne_spin_, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    // Diff
-    totals_sizer->Add(new wxStaticText(this, wxID_ANY, "Diff:"), 0, wxALIGN_RIGHT | wxALIGN_CENTER_VERTICAL);
-    diff_text_ = new wxStaticText(this, wxID_ANY, "0,00 €");
-    totals_sizer->Add(diff_text_, 0, wxALIGN_LEFT | wxALIGN_CENTER_VERTICAL);
-
-    sizer->Add(totals_sizer, 0, wxALL | wxEXPAND, 10);
+    if (!accounts_.empty()) {
+        account_choice_->SetSelection(0);
+        current_account_id_ = accounts_[0].id;
+        load_transactions();
+        update_balance();
+    }
 }
 
-void AccountsPage::refresh_transactions() {
+void AccountsPage::load_transactions() {
     txn_list_->DeleteAllItems();
+    
+    if (current_account_id_ < 0) {
+        return;
+    }
 
-    db::dao::TxnDAO txn_dao(db_);
-    db::dao::TypeDAO type_dao(db_);
+    current_transactions_ = store_.get_transactions_by_account(current_account_id_);
 
-    transactions_ = txn_dao.find_by_account(current_account_id_);
-
-    for (const auto& txn : transactions_) {
-        wxVector<wxVariant> row;
-        row.push_back(format_date(txn.op_date));
-        row.push_back(wxVariant(txn.label));
-        row.push_back(format_currency(txn.amount_cents));
-        row.push_back(wxVariant(txn.pointed));
-
+    for (const auto& txn : current_transactions_) {
+        wxVector<wxVariant> data;
+        data.push_back(format_date(txn.op_date));
+        data.push_back(wxString(txn.label));
+        data.push_back(format_currency(txn.amount_cents));
+        
+        // Type
         wxString type_name = "-";
-        if (txn.type_id) {
-            auto type_opt = type_dao.find_by_id(*txn.type_id);
-            if (type_opt) {
+        if (txn.type_id.has_value()) {
+            auto type_opt = store_.get_type_by_id(txn.type_id.value());
+            if (type_opt.has_value()) {
                 type_name = type_opt->name;
             }
         }
-        row.push_back(wxVariant(type_name));
-
-        txn_list_->AppendItem(row);
+        data.push_back(type_name);
+        data.push_back(txn.pointed);
+        
+        txn_list_->AppendItem(data);
     }
 }
 
-void AccountsPage::refresh_totals() {
-    db::dao::TxnDAO txn_dao(db_);
-    totals_ = txn_dao.calculate_totals(current_account_id_);
+void AccountsPage::update_balance() {
+    if (current_account_id_ < 0) {
+        balance_text_->SetLabelText("Solde: 0,00 €");
+        return;
+    }
 
-    update_totals_display();
+    double balance = store_.get_account_balance(current_account_id_);
+    balance_text_->SetLabelText("Solde: " + format_currency(balance));
 }
 
-void AccountsPage::update_totals_display() {
-    restant_text_->SetLabelText(format_currency(totals_.restant));
-    somme_pointee_text_->SetLabelText(format_currency(totals_.somme_pointee));
-    somme_en_ligne_spin_->SetValue(totals_.somme_en_ligne / 100.0);
-    diff_text_->SetLabelText(format_currency(totals_.diff));
+void AccountsPage::on_account_selected(wxCommandEvent& event) {
+    int sel = account_choice_->GetSelection();
+    if (sel != wxNOT_FOUND) {
+        current_account_id_ = reinterpret_cast<int64_t>(account_choice_->GetClientData(sel));
+        load_transactions();
+        update_balance();
+    }
 }
 
-void AccountsPage::on_add_transaction(wxCommandEvent& WXUNUSED(event)) {
-    core::Txn txn;
-    txn.account_id = current_account_id_;
-    txn.op_date = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-
-    TxnEditDlg dlg(this, db_, txn, true);
+void AccountsPage::on_add_account(wxCommandEvent& event) {
+    wxTextEntryDialog dlg(this, "Nom du compte:", "Nouveau compte");
     if (dlg.ShowModal() == wxID_OK) {
-        refresh_transactions();
-        refresh_totals();
-    }
-}
-
-void AccountsPage::on_edit_transaction(wxCommandEvent& WXUNUSED(event)) {
-    int row = txn_list_->GetSelectedRow();
-    if (row == wxNOT_FOUND) {
-        wxMessageBox("Veuillez sélectionner une transaction", "Information", wxOK | wxICON_INFORMATION);
-        return;
-    }
-
-    if (row >= 0 && row < static_cast<int>(transactions_.size())) {
-        TxnEditDlg dlg(this, db_, transactions_[row], false);
-        if (dlg.ShowModal() == wxID_OK) {
-            refresh_transactions();
-            refresh_totals();
-        }
-    }
-}
-
-void AccountsPage::on_delete_transaction(wxCommandEvent& WXUNUSED(event)) {
-    int row = txn_list_->GetSelectedRow();
-    if (row == wxNOT_FOUND) {
-        wxMessageBox("Veuillez sélectionner une transaction", "Information", wxOK | wxICON_INFORMATION);
-        return;
-    }
-
-    if (row >= 0 && row < static_cast<int>(transactions_.size())) {
-        int answer = wxMessageBox("Êtes-vous sûr de vouloir supprimer cette transaction ?",
-                                 "Confirmation", wxYES_NO | wxICON_QUESTION);
-        if (answer == wxYES) {
-            db::dao::TxnDAO txn_dao(db_);
-            if (txn_dao.remove(transactions_[row].id)) {
-                refresh_transactions();
-                refresh_totals();
+        wxString name = dlg.GetValue().Trim();
+        if (!name.IsEmpty()) {
+            core::Account account;
+            account.name = name.ToStdString();
+            
+            int64_t id = store_.add_account(account);
+            if (id > 0) {
+                load_accounts();
+                // Sélectionner le nouveau compte
+                for (size_t i = 0; i < accounts_.size(); i++) {
+                    if (accounts_[i].id == id) {
+                        account_choice_->SetSelection(i);
+                        current_account_id_ = id;
+                        load_transactions();
+                        update_balance();
+                        break;
+                    }
+                }
             }
         }
     }
 }
 
-void AccountsPage::on_toggle_pointed(wxCommandEvent& WXUNUSED(event)) {
-    int row = txn_list_->GetSelectedRow();
-    if (row == wxNOT_FOUND) {
-        wxMessageBox("Veuillez sélectionner une transaction", "Information", wxOK | wxICON_INFORMATION);
+void AccountsPage::on_edit_account(wxCommandEvent& event) {
+    if (current_account_id_ < 0) {
+        wxMessageBox("Aucun compte sélectionné", "Erreur", wxOK | wxICON_ERROR, this);
         return;
     }
 
-    if (row >= 0 && row < static_cast<int>(transactions_.size())) {
-        db::dao::TxnDAO txn_dao(db_);
-        if (txn_dao.toggle_pointed(transactions_[row].id)) {
-            refresh_transactions();
-            refresh_totals();
+    auto account_opt = store_.get_account_by_id(current_account_id_);
+    if (!account_opt.has_value()) {
+        wxMessageBox("Compte introuvable", "Erreur", wxOK | wxICON_ERROR, this);
+        return;
+    }
+
+    core::Account account = account_opt.value();
+    wxTextEntryDialog dlg(this, "Nom du compte:", "Modifier le compte", account.name);
+    if (dlg.ShowModal() == wxID_OK) {
+        wxString name = dlg.GetValue().Trim();
+        if (!name.IsEmpty()) {
+            account.name = name.ToStdString();
+            if (store_.update_account(account)) {
+                load_accounts();
+            }
         }
     }
 }
 
-void AccountsPage::on_somme_en_ligne_changed(wxSpinDoubleEvent& WXUNUSED(event)) {
-    int64_t new_value = static_cast<int64_t>(somme_en_ligne_spin_->GetValue() * 100);
-    totals_.somme_en_ligne = new_value;
-    totals_.calculate();
-
-    // Sauvegarder dans settings
-    std::string key = "online_sum:" + std::to_string(current_account_id_);
-    std::string value = std::to_string(new_value);
-
-    sqlite3_stmt* stmt = nullptr;
-    const char* sql = "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)";
-
-    if (sqlite3_prepare_v2(db_.handle(), sql, -1, &stmt, nullptr) == SQLITE_OK) {
-        sqlite3_bind_text(stmt, 1, key.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_bind_text(stmt, 2, value.c_str(), -1, SQLITE_TRANSIENT);
-        sqlite3_step(stmt);
-        sqlite3_finalize(stmt);
+void AccountsPage::on_delete_account(wxCommandEvent& event) {
+    if (current_account_id_ < 0) {
+        wxMessageBox("Aucun compte sélectionné", "Erreur", wxOK | wxICON_ERROR, this);
+        return;
     }
 
-    diff_text_->SetLabelText(format_currency(totals_.diff));
+    if (wxMessageBox("Voulez-vous vraiment supprimer ce compte et toutes ses transactions ?",
+                     "Confirmation", wxYES_NO | wxICON_QUESTION, this) == wxYES) {
+        // Supprimer toutes les transactions du compte
+        for (const auto& txn : current_transactions_) {
+            store_.remove_transaction(txn.id);
+        }
+        
+        // Supprimer le compte
+        if (store_.remove_account(current_account_id_)) {
+            current_account_id_ = -1;
+            load_accounts();
+        }
+    }
 }
 
-void AccountsPage::on_txn_activated(wxDataViewEvent& WXUNUSED(event)) {
-    wxCommandEvent dummy;
-    on_edit_transaction(dummy);
+void AccountsPage::on_add_txn(wxCommandEvent& event) {
+    if (current_account_id_ < 0) {
+        wxMessageBox("Veuillez d'abord sélectionner un compte", "Erreur", wxOK | wxICON_ERROR, this);
+        return;
+    }
+
+    core::Txn txn;
+    txn.account_id = current_account_id_;
+    
+    TxnEditDlg dlg(this, store_, txn, true);
+    if (dlg.ShowModal() == wxID_OK) {
+        load_transactions();
+        update_balance();
+    }
 }
 
-wxString AccountsPage::format_currency(int64_t cents) {
-    double euros = cents / 100.0;
+void AccountsPage::on_edit_txn(wxCommandEvent& event) {
+    int row = txn_list_->GetSelectedRow();
+    if (row == wxNOT_FOUND) {
+        wxMessageBox("Veuillez sélectionner une transaction", "Erreur", wxOK | wxICON_ERROR, this);
+        return;
+    }
+
+    if (row >= 0 && row < static_cast<int>(current_transactions_.size())) {
+        core::Txn txn = current_transactions_[row];
+        TxnEditDlg dlg(this, store_, txn, false);
+        if (dlg.ShowModal() == wxID_OK) {
+            load_transactions();
+            update_balance();
+        }
+    }
+}
+
+void AccountsPage::on_delete_txn(wxCommandEvent& event) {
+    int row = txn_list_->GetSelectedRow();
+    if (row == wxNOT_FOUND) {
+        wxMessageBox("Veuillez sélectionner une transaction", "Erreur", wxOK | wxICON_ERROR, this);
+        return;
+    }
+
+    if (wxMessageBox("Voulez-vous vraiment supprimer cette transaction ?",
+                     "Confirmation", wxYES_NO | wxICON_QUESTION, this) == wxYES) {
+        if (row >= 0 && row < static_cast<int>(current_transactions_.size())) {
+            int64_t txn_id = current_transactions_[row].id;
+            if (store_.remove_transaction(txn_id)) {
+                load_transactions();
+                update_balance();
+            }
+        }
+    }
+}
+
+void AccountsPage::on_import_csv(wxCommandEvent& event) {
+    if (current_account_id_ < 0) {
+        wxMessageBox("Veuillez d'abord sélectionner un compte", "Erreur", wxOK | wxICON_ERROR, this);
+        return;
+    }
+
+    ImportCsvDlg dlg(this, store_, current_account_id_);
+    if (dlg.ShowModal() == wxID_OK) {
+        load_transactions();
+        update_balance();
+    }
+}
+
+void AccountsPage::on_txn_activated(wxDataViewEvent& event) {
+    int row = txn_list_->GetSelectedRow();
+    if (row >= 0 && row < static_cast<int>(current_transactions_.size())) {
+        core::Txn txn = current_transactions_[row];
+        TxnEditDlg dlg(this, store_, txn, false);
+        if (dlg.ShowModal() == wxID_OK) {
+            load_transactions();
+            update_balance();
+        }
+    }
+}
+
+wxString AccountsPage::format_currency(double amount) {
+    double euros = amount / 100.0;
     return wxString::Format("%.2f €", euros);
 }
 
 wxString AccountsPage::format_date(int64_t timestamp) {
-    std::time_t time = static_cast<std::time_t>(timestamp);
-    std::tm* tm_info = std::localtime(&time);
-
-    std::ostringstream oss;
-    oss << std::put_time(tm_info, "%d/%m/%Y");
-    return wxString(oss.str());
+    if (timestamp == 0) {
+        return "-";
+    }
+    
+    wxDateTime dt;
+    dt.Set(static_cast<time_t>(timestamp));
+    return dt.FormatDate();
 }
 
 } // namespace mc::ui
