@@ -1,0 +1,6 @@
+#pragma once
+
+#define MC_VERSION_MAJOR 0
+#define MC_VERSION_MINOR 1
+#define MC_VERSION_PATCH @BUILD_NUMBER@
+#define MC_VERSION_STRING "@PROJECT_VERSION@"
