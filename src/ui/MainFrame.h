@@ -31,6 +31,7 @@ private:
     void OnTogglePointee(wxCommandEvent& event);
     void OnSommeEnLigneChanged(wxCommandEvent& event);
     void OnTransactionDoubleClick(wxListEvent& event);
+    void OnTransactionRightClick(wxListEvent& event);
 
     // Helper methods
     void ShowTransactionDialog(Transaction* existingTransaction = nullptr);

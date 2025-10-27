@@ -20,6 +20,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_BUTTON(ID_TOGGLE_POINTEE, MainFrame::OnTogglePointee)
     EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
     EVT_LIST_ITEM_ACTIVATED(ID_TRANSACTION_LIST, MainFrame::OnTransactionDoubleClick)
+    EVT_LIST_ITEM_RIGHT_CLICK(ID_TRANSACTION_LIST, MainFrame::OnTransactionRightClick)
 wxEND_EVENT_TABLE()
 
 MainFrame::MainFrame(const wxString& title)
@@ -92,12 +93,12 @@ void MainFrame::CreateControls() {
     // Boutons d'action
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
     wxButton* addBtn = new wxButton(panel, ID_ADD_TRANSACTION, "Ajouter");
-    wxButton* deleteBtn = new wxButton(panel, ID_DELETE_TRANSACTION, "Supprimer");
-    wxButton* toggleBtn = new wxButton(panel, ID_TOGGLE_POINTEE, "Pointer/Dépointer");
-    
+
     buttonSizer->Add(addBtn, 0, wxALL, 5);
-    buttonSizer->Add(deleteBtn, 0, wxALL, 5);
-    buttonSizer->Add(toggleBtn, 0, wxALL, 5);
+    wxStaticText* hintText = new wxStaticText(panel, wxID_ANY,
+        "Astuce: Double-clic pour éditer | Clic droit pour plus d'options");
+    buttonSizer->Add(hintText, 0, wxALL, 5);
+
     mainSizer->Add(buttonSizer, 0, wxALL | wxEXPAND, 5);
 
     // Liste des transactions
@@ -374,4 +375,59 @@ void MainFrame::OnTransactionDoubleClick(wxListEvent& event) {
             break;
         }
     }
+}
+
+void MainFrame::OnTransactionRightClick(wxListEvent& event) {
+    long selectedItem = event.GetIndex();
+    if (selectedItem == -1) {
+        return;
+    }
+
+    // Sélectionner l'élément si ce n'est pas déjà fait
+    mTransactionList->SetItemState(selectedItem, wxLIST_STATE_SELECTED, wxLIST_STATE_SELECTED);
+
+    int transactionId = mTransactionList->GetItemData(selectedItem);
+
+    // Récupérer la transaction pour vérifier son état
+    auto transactions = mDatabase->GetAllTransactions();
+    Transaction* currentTransaction = nullptr;
+
+    for (auto& trans : transactions) {
+        if (trans.GetId() == transactionId) {
+            currentTransaction = &trans;
+            break;
+        }
+    }
+
+    if (currentTransaction == nullptr) {
+        return;
+    }
+
+    // Créer le menu contextuel
+    wxMenu contextMenu;
+
+    // Option Éditer (seulement si non pointée)
+    if (!currentTransaction->IsPointee()) {
+        contextMenu.Append(wxID_EDIT, "Éditer");
+        contextMenu.Bind(wxEVT_COMMAND_MENU_SELECTED, [this, currentTransaction](wxCommandEvent&) {
+            ShowTransactionDialog(currentTransaction);
+        }, wxID_EDIT);
+    }
+
+    // Option Pointer/Dépointer
+    if (currentTransaction->IsPointee()) {
+        contextMenu.Append(ID_TOGGLE_POINTEE, "Dépointer");
+    } else {
+        contextMenu.Append(ID_TOGGLE_POINTEE, "Pointer");
+    }
+    contextMenu.Bind(wxEVT_COMMAND_MENU_SELECTED, &MainFrame::OnTogglePointee, this, ID_TOGGLE_POINTEE);
+
+    contextMenu.AppendSeparator();
+
+    // Option Supprimer
+    contextMenu.Append(ID_DELETE_TRANSACTION, "Supprimer");
+    contextMenu.Bind(wxEVT_COMMAND_MENU_SELECTED, &MainFrame::OnDeleteTransaction, this, ID_DELETE_TRANSACTION);
+
+    // Afficher le menu à la position du curseur
+    PopupMenu(&contextMenu);
 }
