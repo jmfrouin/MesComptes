@@ -155,10 +155,12 @@ void MainFrame::LoadTransactions() {
         wxString sommeStr;
         if (isDepense) {
             sommeStr = wxString::Format("-%.2f", trans.GetSomme());
-            mTransactionList->SetItemTextColour(index, *wxRED);
+            // Rouge pastel (salmon/coral)
+            mTransactionList->SetItemTextColour(index, wxColour(220, 100, 100));
         } else {
             sommeStr = wxString::Format("+%.2f", trans.GetSomme());
-            mTransactionList->SetItemTextColour(index, wxColour(0, 128, 0)); // Vert foncé
+            // Vert pastel
+            mTransactionList->SetItemTextColour(index, wxColour(100, 180, 120));
         }
         
         mTransactionList->SetItem(index, 2, sommeStr);
