@@ -76,12 +76,12 @@ void MainFrame::OnAbout(wxCommandEvent& event) {
         "• C++20\n"
         "• wxWidgets %s\n"
         "• SQLite3\n\n"
-        "© 2025 F451 Development Team - JM Frouin",
+        "© 2025 Development Team - JM Frouin",
         MESCOMPTES::VERSION_STRING,
         wxVERSION_STRING
     );
 
-    wxMessageBox(aboutText, "About F451", wxOK | wxICON_INFORMATION, this);
+    wxMessageBox(aboutText, "About MesComptes", wxOK | wxICON_INFORMATION, this);
 }
 
 void MainFrame::CreateControls() {
@@ -142,13 +142,25 @@ void MainFrame::CreateControls() {
 
 void MainFrame::LoadTransactions() {
     mTransactionList->DeleteAllItems();
-
+    
     auto transactions = mDatabase->GetAllTransactions();
     for (size_t i = 0; i < transactions.size(); ++i) {
         const auto& trans = transactions[i];
         long index = mTransactionList->InsertItem(i, trans.GetDate().Format("%Y-%m-%d"));
         mTransactionList->SetItem(index, 1, trans.GetLibelle());
-        mTransactionList->SetItem(index, 2, wxString::Format("%.2f", trans.GetSomme()));
+        
+        // Afficher avec signe + ou - selon le type
+        bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
+        wxString sommeStr;
+        if (isDepense) {
+            sommeStr = wxString::Format("-%.2f", trans.GetSomme());
+            mTransactionList->SetItemTextColour(index, *wxRED);
+        } else {
+            sommeStr = wxString::Format("+%.2f", trans.GetSomme());
+            mTransactionList->SetItemTextColour(index, wxColour(0, 128, 0)); // Vert foncé
+        }
+        
+        mTransactionList->SetItem(index, 2, sommeStr);
         mTransactionList->SetItem(index, 3, trans.IsPointee() ? "Oui" : "Non");
         mTransactionList->SetItem(index, 4, trans.GetType());
         mTransactionList->SetItemData(index, trans.GetId());
@@ -211,7 +223,8 @@ void MainFrame::OnAddTransaction(wxCommandEvent& event) {
     wxChoice* typeChoice = new wxChoice(&dialog, wxID_ANY);
     auto types = mDatabase->GetAllTypes();
     for (const auto& type : types) {
-        typeChoice->Append(type);
+        wxString displayName = type.mNom + (type.mIsDepense ? " (Dépense)" : " (Recette)");
+        typeChoice->Append(displayName, new wxStringClientData(type.mNom));
     }
     if (!types.empty()) {
         typeChoice->SetSelection(0);
@@ -240,7 +253,12 @@ void MainFrame::OnAddTransaction(wxCommandEvent& event) {
         }
 
         trans.SetPointee(pointeeCheck->GetValue());
-        trans.SetType(typeChoice->GetStringSelection().ToStdString());
+        
+        // Récupérer le nom réel du type (sans le suffixe)
+        wxStringClientData* data = static_cast<wxStringClientData*>(
+            typeChoice->GetClientObject(typeChoice->GetSelection())
+        );
+        trans.SetType(data->GetData().ToStdString());
 
         if (mDatabase->AddTransaction(trans)) {
             LoadTransactions();

@@ -2,7 +2,7 @@
 // Created by Jean-Michel Frouin on 27/10/2025.
 //
 
-#include "Database.h"
+#include <core/Database.h>
 #include <iostream>
 #include <sstream>
 
@@ -24,6 +24,7 @@ bool Database::Open() {
         return false;
     }
 
+    MigrateTypesTable();
     InitializeDefaultTypes();
     return true;
 }
@@ -50,7 +51,8 @@ bool Database::CreateTables() {
     const char* sqlTypes = R"(
         CREATE TABLE IF NOT EXISTS types (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nom TEXT UNIQUE NOT NULL
+            nom TEXT UNIQUE NOT NULL,
+            is_depense INTEGER NOT NULL DEFAULT 1
         );
     )";
 
@@ -72,15 +74,51 @@ bool Database::CreateTables() {
     return true;
 }
 
-bool Database::InitializeDefaultTypes() {
-    std::vector<std::string> defaultTypes = {"CB", "CHEQUE", "VIREMENT"};
+void Database::MigrateTypesTable() {
+    // Vérifier si la colonne is_depense existe déjà
+    const char* sqlCheck = "PRAGMA table_info(types);";
+    sqlite3_stmt* stmt;
+    bool hasIsDepense = false;
+    
+    if (sqlite3_prepare_v2(mDb, sqlCheck, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            std::string columnName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            if (columnName == "is_depense") {
+                hasIsDepense = true;
+                break;
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
 
-    for (const auto& type : defaultTypes) {
-        std::string sql = "INSERT OR IGNORE INTO types (nom) VALUES ('" + type + "');";
+    // Si la colonne n'existe pas, l'ajouter
+    if (!hasIsDepense) {
+        const char* sqlAlter = "ALTER TABLE types ADD COLUMN is_depense INTEGER NOT NULL DEFAULT 1;";
         char* errMsg = nullptr;
-        int rc = sqlite3_exec(mDb, sql.c_str(), nullptr, nullptr, &errMsg);
-        if (rc != SQLITE_OK) {
+        sqlite3_exec(mDb, sqlAlter, nullptr, nullptr, &errMsg);
+        if (errMsg) {
             sqlite3_free(errMsg);
+        }
+    }
+}
+
+bool Database::InitializeDefaultTypes() {
+    // CB et CHEQUE sont des dépenses (true = 1)
+    // VIREMENT peut être une recette (false = 0)
+    std::vector<std::pair<std::string, bool>> defaultTypes = {
+        {"CB", true},
+        {"CHEQUE", true},
+        {"VIREMENT", false}
+    };
+    
+    for (const auto& [type, isDepense] : defaultTypes) {
+        std::string sql = "INSERT OR IGNORE INTO types (nom, is_depense) VALUES (?, ?);";
+        sqlite3_stmt* stmt;
+        if (sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr) == SQLITE_OK) {
+            sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_int(stmt, 2, isDepense ? 1 : 0);
+            sqlite3_step(stmt);
+            sqlite3_finalize(stmt);
         }
     }
     return true;
@@ -177,9 +215,9 @@ std::vector<Transaction> Database::GetAllTransactions() {
     return transactions;
 }
 
-bool Database::AddType(const std::string& type) {
-    std::string sql = "INSERT INTO types (nom) VALUES (?);";
-
+bool Database::AddType(const std::string& type, bool isDepense) {
+    std::string sql = "INSERT INTO types (nom, is_depense) VALUES (?, ?);";
+    
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
@@ -187,6 +225,24 @@ bool Database::AddType(const std::string& type) {
     }
 
     sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 2, isDepense ? 1 : 0);
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    return rc == SQLITE_DONE;
+}
+
+bool Database::UpdateType(const std::string& type, bool isDepense) {
+    std::string sql = "UPDATE types SET is_depense=? WHERE nom=?;";
+    
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, isDepense ? 1 : 0);
+    sqlite3_bind_text(stmt, 2, type.c_str(), -1, SQLITE_TRANSIENT);
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
@@ -195,7 +251,7 @@ bool Database::AddType(const std::string& type) {
 
 bool Database::DeleteType(const std::string& type) {
     std::string sql = "DELETE FROM types WHERE nom=?;";
-
+    
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
@@ -209,10 +265,10 @@ bool Database::DeleteType(const std::string& type) {
     return rc == SQLITE_DONE;
 }
 
-std::vector<std::string> Database::GetAllTypes() {
-    std::vector<std::string> types;
-    std::string sql = "SELECT nom FROM types ORDER BY nom;";
-
+std::vector<TransactionType> Database::GetAllTypes() {
+    std::vector<TransactionType> types;
+    std::string sql = "SELECT nom, is_depense FROM types ORDER BY nom;";
+    
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
@@ -220,17 +276,47 @@ std::vector<std::string> Database::GetAllTypes() {
     }
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
-        std::string type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-        types.push_back(type);
+        std::string nom = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+        bool isDepense = sqlite3_column_int(stmt, 1) != 0;
+        types.emplace_back(nom, isDepense);
     }
 
     sqlite3_finalize(stmt);
     return types;
 }
 
-double Database::GetTotalRestant() {
-    std::string sql = "SELECT SUM(somme) FROM transactions;";
+bool Database::IsTypeDepense(const std::string& type) {
+    std::string sql = "SELECT is_depense FROM types WHERE nom=?;";
+    
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        return true;  // Par défaut, considérer comme dépense
+    }
 
+    sqlite3_bind_text(stmt, 1, type.c_str(), -1, SQLITE_TRANSIENT);
+    
+    bool isDepense = true;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        isDepense = sqlite3_column_int(stmt, 0) != 0;
+    }
+
+    sqlite3_finalize(stmt);
+    return isDepense;
+}
+
+double Database::GetTotalRestant() {
+    std::string sql = R"(
+        SELECT SUM(
+            CASE 
+                WHEN types.is_depense = 1 THEN -transactions.somme
+                ELSE transactions.somme
+            END
+        )
+        FROM transactions
+        JOIN types ON transactions.type = types.nom;
+    )";
+    
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {
@@ -247,8 +333,18 @@ double Database::GetTotalRestant() {
 }
 
 double Database::GetTotalPointee() {
-    std::string sql = "SELECT SUM(somme) FROM transactions WHERE pointee=1;";
-
+    std::string sql = R"(
+        SELECT SUM(
+            CASE 
+                WHEN types.is_depense = 1 THEN -transactions.somme
+                ELSE transactions.somme
+            END
+        )
+        FROM transactions
+        JOIN types ON transactions.type = types.nom
+        WHERE transactions.pointee = 1;
+    )";
+    
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
     if (rc != SQLITE_OK) {

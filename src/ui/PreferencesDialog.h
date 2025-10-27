@@ -6,7 +6,7 @@
 #define PREFERENCESDIALOG_H
 
 #include <wx/wx.h>
-#include <wx/listbox.h>
+#include <wx/listctrl.h>
 #include <core/Database.h>
 
 class PreferencesDialog : public wxDialog {
@@ -17,9 +17,12 @@ private:
     void LoadTypes();
     void OnAdd(wxCommandEvent& event);
     void OnDelete(wxCommandEvent& event);
+    void OnEdit(wxCommandEvent& event);
+    void OnItemActivated(wxListEvent& event);
 
-    wxListBox* mTypeList;
+    wxListCtrl* mTypeList;
     wxTextCtrl* mNewTypeText;
+    wxRadioBox* mTypeRadio;
     Database* mDatabase;
 
     wxDECLARE_EVENT_TABLE();
@@ -27,7 +30,9 @@ private:
 
 enum {
     ID_ADD_TYPE = wxID_HIGHEST + 100,
-    ID_DELETE_TYPE
+    ID_DELETE_TYPE,
+    ID_EDIT_TYPE,
+    ID_TYPE_LIST
 };
 
 #endif // PREFERENCESDIALOG_H
