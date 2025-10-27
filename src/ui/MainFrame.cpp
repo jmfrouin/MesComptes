@@ -19,12 +19,13 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_BUTTON(ID_DELETE_TRANSACTION, MainFrame::OnDeleteTransaction)
     EVT_BUTTON(ID_TOGGLE_POINTEE, MainFrame::OnTogglePointee)
     EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
+    EVT_LIST_ITEM_ACTIVATED(ID_TRANSACTION_LIST, MainFrame::OnTransactionDoubleClick)
 wxEND_EVENT_TABLE()
 
 MainFrame::MainFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(900, 600)),
       mSommeEnLigne(0.0) {
-
+    
     mDatabase = std::make_unique<Database>("mescomptes.db");
     if (!mDatabase->Open()) {
         wxMessageBox("Erreur lors de l'ouverture de la base de données",
@@ -93,14 +94,14 @@ void MainFrame::CreateControls() {
     wxButton* addBtn = new wxButton(panel, ID_ADD_TRANSACTION, "Ajouter");
     wxButton* deleteBtn = new wxButton(panel, ID_DELETE_TRANSACTION, "Supprimer");
     wxButton* toggleBtn = new wxButton(panel, ID_TOGGLE_POINTEE, "Pointer/Dépointer");
-
+    
     buttonSizer->Add(addBtn, 0, wxALL, 5);
     buttonSizer->Add(deleteBtn, 0, wxALL, 5);
     buttonSizer->Add(toggleBtn, 0, wxALL, 5);
     mainSizer->Add(buttonSizer, 0, wxALL | wxEXPAND, 5);
 
     // Liste des transactions
-    mTransactionList = new wxListCtrl(panel, wxID_ANY, wxDefaultPosition,
+    mTransactionList = new wxListCtrl(panel, ID_TRANSACTION_LIST, wxDefaultPosition,
                                        wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
     mTransactionList->AppendColumn("Date", wxLIST_FORMAT_LEFT, 120);
     mTransactionList->AppendColumn("Libellé", wxLIST_FORMAT_LEFT, 300);
@@ -191,9 +192,12 @@ void MainFrame::OnInfo(wxCommandEvent& event) {
     dialog.ShowModal();
 }
 
-void MainFrame::OnAddTransaction(wxCommandEvent& event) {
-    wxDialog dialog(this, wxID_ANY, "Ajouter une transaction", wxDefaultPosition, wxSize(400, 300));
-
+void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
+    bool isEdit = (existingTransaction != nullptr);
+    wxString dialogTitle = isEdit ? "Modifier une transaction" : "Ajouter une transaction";
+    
+    wxDialog dialog(this, wxID_ANY, dialogTitle, wxDefaultPosition, wxSize(400, 300));
+    
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
     wxFlexGridSizer* gridSizer = new wxFlexGridSizer(5, 2, 5, 10);
     gridSizer->AddGrowableCol(1);
@@ -201,33 +205,50 @@ void MainFrame::OnAddTransaction(wxCommandEvent& event) {
     // Date
     gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, "Date:"), 0, wxALIGN_CENTER_VERTICAL);
     wxDatePickerCtrl* datePicker = new wxDatePickerCtrl(&dialog, wxID_ANY);
+    if (isEdit) {
+        datePicker->SetValue(existingTransaction->GetDate());
+    }
     gridSizer->Add(datePicker, 1, wxEXPAND);
 
     // Libellé
     gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, "Libellé:"), 0, wxALIGN_CENTER_VERTICAL);
     wxTextCtrl* libelleText = new wxTextCtrl(&dialog, wxID_ANY);
+    if (isEdit) {
+        libelleText->SetValue(existingTransaction->GetLibelle());
+    }
     gridSizer->Add(libelleText, 1, wxEXPAND);
 
     // Somme
     gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, "Somme:"), 0, wxALIGN_CENTER_VERTICAL);
     wxTextCtrl* sommeText = new wxTextCtrl(&dialog, wxID_ANY);
+    if (isEdit) {
+        sommeText->SetValue(wxString::Format("%.2f", existingTransaction->GetSomme()));
+    }
     gridSizer->Add(sommeText, 1, wxEXPAND);
 
     // Pointée
     gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, "Pointée:"), 0, wxALIGN_CENTER_VERTICAL);
     wxCheckBox* pointeeCheck = new wxCheckBox(&dialog, wxID_ANY, "");
+    if (isEdit) {
+        pointeeCheck->SetValue(existingTransaction->IsPointee());
+    }
     gridSizer->Add(pointeeCheck, 1, wxEXPAND);
 
     // Type
     gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, "Type:"), 0, wxALIGN_CENTER_VERTICAL);
     wxChoice* typeChoice = new wxChoice(&dialog, wxID_ANY);
     auto types = mDatabase->GetAllTypes();
-    for (const auto& type : types) {
-        wxString displayName = type.mNom + (type.mIsDepense ? " (Dépense)" : " (Recette)");
-        typeChoice->Append(displayName, new wxStringClientData(type.mNom));
+    int selectedIndex = 0;
+    for (size_t i = 0; i < types.size(); ++i) {
+        wxString displayName = types[i].mNom + (types[i].mIsDepense ? " (Dépense)" : " (Recette)");
+        typeChoice->Append(displayName, new wxStringClientData(types[i].mNom));
+        
+        if (isEdit && types[i].mNom == existingTransaction->GetType()) {
+            selectedIndex = i;
+        }
     }
     if (!types.empty()) {
-        typeChoice->SetSelection(0);
+        typeChoice->SetSelection(selectedIndex);
     }
     gridSizer->Add(typeChoice, 1, wxEXPAND);
 
@@ -244,14 +265,18 @@ void MainFrame::OnAddTransaction(wxCommandEvent& event) {
 
     if (dialog.ShowModal() == wxID_OK) {
         Transaction trans;
+        if (isEdit) {
+            trans.SetId(existingTransaction->GetId());
+        }
+        
         trans.SetDate(datePicker->GetValue());
         trans.SetLibelle(libelleText->GetValue().ToStdString());
-
+        
         double somme;
         if (sommeText->GetValue().ToDouble(&somme)) {
             trans.SetSomme(somme);
         }
-
+        
         trans.SetPointee(pointeeCheck->GetValue());
         
         // Récupérer le nom réel du type (sans le suffixe)
@@ -260,14 +285,26 @@ void MainFrame::OnAddTransaction(wxCommandEvent& event) {
         );
         trans.SetType(data->GetData().ToStdString());
 
-        if (mDatabase->AddTransaction(trans)) {
+        bool success = false;
+        if (isEdit) {
+            success = mDatabase->UpdateTransaction(trans);
+        } else {
+            success = mDatabase->AddTransaction(trans);
+        }
+
+        if (success) {
             LoadTransactions();
             UpdateSummary();
         } else {
-            wxMessageBox("Erreur lors de l'ajout de la transaction",
+            wxMessageBox(isEdit ? "Erreur lors de la modification de la transaction" 
+                                : "Erreur lors de l'ajout de la transaction",
                          "Erreur", wxOK | wxICON_ERROR);
         }
     }
+}
+
+void MainFrame::OnAddTransaction(wxCommandEvent& event) {
+    ShowTransactionDialog(nullptr);
 }
 
 void MainFrame::OnDeleteTransaction(wxCommandEvent& event) {
@@ -278,7 +315,7 @@ void MainFrame::OnDeleteTransaction(wxCommandEvent& event) {
     }
 
     int transactionId = mTransactionList->GetItemData(selectedItem);
-
+    
     if (wxMessageBox("Êtes-vous sûr de vouloir supprimer cette transaction?",
                      "Confirmation", wxYES_NO | wxICON_QUESTION) == wxYES) {
         if (mDatabase->DeleteTransaction(transactionId)) {
@@ -317,5 +354,22 @@ void MainFrame::OnSommeEnLigneChanged(wxCommandEvent& event) {
     if (mSommeEnLigneText->GetValue().ToDouble(&somme)) {
         mSommeEnLigne = somme;
         UpdateSummary();
+    }
+}
+
+void MainFrame::OnTransactionDoubleClick(wxListEvent& event) {
+    long selectedItem = event.GetIndex();
+    if (selectedItem == -1) {
+        return;
+    }
+
+    int transactionId = mTransactionList->GetItemData(selectedItem);
+    auto transactions = mDatabase->GetAllTransactions();
+    
+    for (auto& trans : transactions) {
+        if (trans.GetId() == transactionId && !trans.IsPointee()) {
+            ShowTransactionDialog(&trans);
+            break;
+        }
     }
 }

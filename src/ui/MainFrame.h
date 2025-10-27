@@ -30,6 +30,10 @@ private:
     void OnDeleteTransaction(wxCommandEvent& event);
     void OnTogglePointee(wxCommandEvent& event);
     void OnSommeEnLigneChanged(wxCommandEvent& event);
+    void OnTransactionDoubleClick(wxListEvent& event);
+
+    // Helper methods
+    void ShowTransactionDialog(Transaction* existingTransaction = nullptr);
 
     // Widgets
     wxListCtrl* mTransactionList;
@@ -52,7 +56,8 @@ enum {
     ID_ADD_TRANSACTION,
     ID_DELETE_TRANSACTION,
     ID_TOGGLE_POINTEE,
-    ID_SOMME_EN_LIGNE
+    ID_SOMME_EN_LIGNE,
+    ID_TRANSACTION_LIST
 };
 
 #endif // MAINFRAME_H

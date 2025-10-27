@@ -187,6 +187,36 @@ bool Database::DeleteTransaction(int id) {
     return rc == SQLITE_DONE;
 }
 
+Transaction Database::GetTransaction(int id) {
+    std::string sql = "SELECT id, date, libelle, somme, pointee, type FROM transactions WHERE id=?;";
+    
+    sqlite3_stmt* stmt;
+    int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        return Transaction();
+    }
+
+    sqlite3_bind_int(stmt, 1, id);
+
+    Transaction trans;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        int transId = sqlite3_column_int(stmt, 0);
+        std::string dateStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        std::string libelle = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        double somme = sqlite3_column_double(stmt, 3);
+        bool pointee = sqlite3_column_int(stmt, 4) != 0;
+        std::string type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+
+        wxDateTime date;
+        date.ParseFormat(dateStr, "%Y-%m-%d");
+
+        trans = Transaction(transId, date, libelle, somme, pointee, type);
+    }
+
+    sqlite3_finalize(stmt);
+    return trans;
+}
+
 std::vector<Transaction> Database::GetAllTransactions() {
     std::vector<Transaction> transactions;
     std::string sql = "SELECT id, date, libelle, somme, pointee, type FROM transactions ORDER BY date DESC;";
