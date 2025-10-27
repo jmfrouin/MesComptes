@@ -15,9 +15,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(ID_PREFERENCES, MainFrame::OnPreferences)
     EVT_MENU(ID_INFO, MainFrame::OnInfo)
     EVT_MENU(wxID_ABOUT, MainFrame::OnAbout)
-    EVT_BUTTON(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
-    EVT_BUTTON(ID_DELETE_TRANSACTION, MainFrame::OnDeleteTransaction)
-    EVT_BUTTON(ID_TOGGLE_POINTEE, MainFrame::OnTogglePointee)
+    EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
     EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
     EVT_LIST_ITEM_ACTIVATED(ID_TRANSACTION_LIST, MainFrame::OnTransactionDoubleClick)
     EVT_LIST_ITEM_RIGHT_CLICK(ID_TRANSACTION_LIST, MainFrame::OnTransactionRightClick)
@@ -50,6 +48,9 @@ void MainFrame::CreateMenuBar() {
 
     // Menu Fichier
     wxMenu* menuFile = new wxMenu;
+    menuFile->Append(ID_ADD_TRANSACTION, "&Nouvelle transaction\tCtrl-N",
+                     "Ajouter une nouvelle transaction");
+    menuFile->AppendSeparator();
     menuFile->Append(ID_PREFERENCES, "&Préférences\tCtrl-P",
                      "Gérer les types de transactions");
     menuFile->AppendSeparator();
@@ -62,6 +63,7 @@ void MainFrame::CreateMenuBar() {
                      "Afficher les informations de la base");
     menuBar->Append(menuInfo, "I&nformations");
 
+    // Menu Aide
     wxMenu* menuHelp = new wxMenu;
     menuHelp->Append(wxID_ABOUT, "À &propos\tF1",
                      "À propos de Mes Comptes");
@@ -89,17 +91,6 @@ void MainFrame::OnAbout(wxCommandEvent& event) {
 void MainFrame::CreateControls() {
     wxPanel* panel = new wxPanel(this);
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-
-    // Boutons d'action
-    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    wxButton* addBtn = new wxButton(panel, ID_ADD_TRANSACTION, "Ajouter");
-
-    buttonSizer->Add(addBtn, 0, wxALL, 5);
-    wxStaticText* hintText = new wxStaticText(panel, wxID_ANY,
-        "Astuce: Double-clic pour éditer | Clic droit pour plus d'options");
-    buttonSizer->Add(hintText, 0, wxALL, 5);
-
-    mainSizer->Add(buttonSizer, 0, wxALL | wxEXPAND, 5);
 
     // Liste des transactions
     mTransactionList = new wxListCtrl(panel, ID_TRANSACTION_LIST, wxDefaultPosition,
