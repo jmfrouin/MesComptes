@@ -1,0 +1,58 @@
+//
+// Created by Jean-Michel Frouin on 27/10/2025.
+//
+
+#ifndef MAINFRAME_H
+#define MAINFRAME_H
+
+#include <wx/wx.h>
+#include <wx/listctrl.h>
+#include <core/Database.h>
+#include <memory>
+
+class MainFrame : public wxFrame {
+public:
+    MainFrame(const wxString& title);
+    ~MainFrame();
+
+private:
+    void CreateMenuBar();
+    void CreateControls();
+    void LoadTransactions();
+    void UpdateSummary();
+
+    // Event handlers
+    void OnQuit(wxCommandEvent& event);
+    void OnPreferences(wxCommandEvent& event);
+    void OnInfo(wxCommandEvent& event);
+    void OnAbout(wxCommandEvent& event);
+    void OnAddTransaction(wxCommandEvent& event);
+    void OnDeleteTransaction(wxCommandEvent& event);
+    void OnTogglePointee(wxCommandEvent& event);
+    void OnSommeEnLigneChanged(wxCommandEvent& event);
+
+    // Widgets
+    wxListCtrl* mTransactionList;
+    wxTextCtrl* mRestantText;
+    wxTextCtrl* mPointeeText;
+    wxTextCtrl* mSommeEnLigneText;
+    wxTextCtrl* mDiffText;
+
+    // Database
+    std::unique_ptr<Database> mDatabase;
+    double mSommeEnLigne;
+
+    wxDECLARE_EVENT_TABLE();
+};
+
+// Event IDs
+enum {
+    ID_PREFERENCES = wxID_HIGHEST + 1,
+    ID_INFO,
+    ID_ADD_TRANSACTION,
+    ID_DELETE_TRANSACTION,
+    ID_TOGGLE_POINTEE,
+    ID_SOMME_EN_LIGNE
+};
+
+#endif // MAINFRAME_H
