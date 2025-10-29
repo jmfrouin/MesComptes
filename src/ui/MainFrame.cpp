@@ -107,6 +107,7 @@ void MainFrame::CreateControls() {
     mTransactionList->AppendColumn("Libellé", wxLIST_FORMAT_LEFT, 300);
     mTransactionList->AppendColumn("Somme", wxLIST_FORMAT_RIGHT, 100);
     mTransactionList->AppendColumn("Pointée", wxLIST_FORMAT_CENTER, 80);
+    mTransactionList->AppendColumn("Date pointée", wxLIST_FORMAT_LEFT, 120);
     mTransactionList->AppendColumn("Type", wxLIST_FORMAT_LEFT, 120);
 
     mainSizer->Add(mTransactionList, 1, wxALL | wxEXPAND, 5);
@@ -163,7 +164,15 @@ void MainFrame::LoadTransactions() {
 
         mTransactionList->SetItem(index, 2, sommeStr);
         mTransactionList->SetItem(index, 3, trans.IsPointee() ? "Oui" : "Non");
-        mTransactionList->SetItem(index, 4, trans.GetType());
+
+        // Afficher la date pointée si elle existe
+        if (trans.IsPointee() && trans.GetDatePointee().IsValid()) {
+            mTransactionList->SetItem(index, 4, trans.GetDatePointee().Format("%Y-%m-%d"));
+        } else {
+            mTransactionList->SetItem(index, 4, "");
+        }
+
+        mTransactionList->SetItem(index, 5, trans.GetType());
         mTransactionList->SetItemData(index, trans.GetId());
     }
 }
@@ -342,7 +351,17 @@ void MainFrame::OnTogglePointee(wxCommandEvent& event) {
 
     for (auto& trans : transactions) {
         if (trans.GetId() == transactionId) {
-            trans.SetPointee(!trans.IsPointee());
+            bool newPointeeStatus = !trans.IsPointee();
+            trans.SetPointee(newPointeeStatus);
+
+            // Si on pointe la transaction, enregistrer la date actuelle
+            if (newPointeeStatus) {
+                trans.SetDatePointee(wxDateTime::Now());
+            } else {
+                // Si on dépointe, réinitialiser la date pointée
+                trans.SetDatePointee(wxDateTime());
+            }
+
             mDatabase->UpdateTransaction(trans);
             LoadTransactions();
             UpdateSummary();

@@ -44,7 +44,8 @@ bool Database::CreateTables() {
             libelle TEXT NOT NULL,
             somme REAL NOT NULL,
             pointee INTEGER NOT NULL,
-            type TEXT NOT NULL
+            type TEXT NOT NULL,
+            date_pointee TEXT
         );
     )";
 
@@ -100,6 +101,30 @@ void Database::MigrateTypesTable() {
             sqlite3_free(errMsg);
         }
     }
+
+    // Migration pour ajouter la colonne date_pointee si elle n'existe pas
+    const char* sqlCheckDatePointee = "PRAGMA table_info(transactions);";
+    bool hasDatePointee = false;
+
+    if (sqlite3_prepare_v2(mDb, sqlCheckDatePointee, -1, &stmt, nullptr) == SQLITE_OK) {
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            std::string columnName = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+            if (columnName == "date_pointee") {
+                hasDatePointee = true;
+                break;
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    if (!hasDatePointee) {
+        const char* sqlAlterDatePointee = "ALTER TABLE transactions ADD COLUMN date_pointee TEXT;";
+        char* errMsg = nullptr;
+        sqlite3_exec(mDb, sqlAlterDatePointee, nullptr, nullptr, &errMsg);
+        if (errMsg) {
+            sqlite3_free(errMsg);
+        }
+    }
 }
 
 bool Database::InitializeDefaultTypes() {
@@ -125,8 +150,8 @@ bool Database::InitializeDefaultTypes() {
 }
 
 bool Database::AddTransaction(const Transaction& transaction) {
-    std::string sql = "INSERT INTO transactions (date, libelle, somme, pointee, type) "
-                      "VALUES (?, ?, ?, ?, ?);";
+    std::string sql = "INSERT INTO transactions (date, libelle, somme, pointee, type, date_pointee) "
+                      "VALUES (?, ?, ?, ?, ?, ?);";
 
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
@@ -141,6 +166,12 @@ bool Database::AddTransaction(const Transaction& transaction) {
     sqlite3_bind_int(stmt, 4, transaction.IsPointee() ? 1 : 0);
     sqlite3_bind_text(stmt, 5, transaction.GetType().c_str(), -1, SQLITE_TRANSIENT);
 
+    if (transaction.GetDatePointee().IsValid()) {
+        sqlite3_bind_text(stmt, 6, transaction.GetDatePointee().Format("%Y-%m-%d").mb_str(), -1, SQLITE_TRANSIENT);
+    } else {
+        sqlite3_bind_null(stmt, 6);
+    }
+
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
 
@@ -148,7 +179,7 @@ bool Database::AddTransaction(const Transaction& transaction) {
 }
 
 bool Database::UpdateTransaction(const Transaction& transaction) {
-    std::string sql = "UPDATE transactions SET date=?, libelle=?, somme=?, pointee=?, type=? "
+    std::string sql = "UPDATE transactions SET date=?, libelle=?, somme=?, pointee=?, type=?, date_pointee=? "
                       "WHERE id=?;";
 
     sqlite3_stmt* stmt;
@@ -163,7 +194,12 @@ bool Database::UpdateTransaction(const Transaction& transaction) {
     sqlite3_bind_double(stmt, 3, transaction.GetSomme());
     sqlite3_bind_int(stmt, 4, transaction.IsPointee() ? 1 : 0);
     sqlite3_bind_text(stmt, 5, transaction.GetType().c_str(), -1, SQLITE_TRANSIENT);
-    sqlite3_bind_int(stmt, 6, transaction.GetId());
+    if (transaction.GetDatePointee().IsValid()) {
+        sqlite3_bind_text(stmt, 6, transaction.GetDatePointee().Format("%Y-%m-%d").mb_str(), -1, SQLITE_TRANSIENT);
+    } else {
+        sqlite3_bind_null(stmt, 6);
+    }
+    sqlite3_bind_int(stmt, 7, transaction.GetId());
 
     rc = sqlite3_step(stmt);
     sqlite3_finalize(stmt);
@@ -219,7 +255,7 @@ Transaction Database::GetTransaction(int id) {
 
 std::vector<Transaction> Database::GetAllTransactions() {
     std::vector<Transaction> transactions;
-    std::string sql = "SELECT id, date, libelle, somme, pointee, type FROM transactions ORDER BY date DESC;";
+    std::string sql = "SELECT id, date, libelle, somme, pointee, type, date_pointee FROM transactions ORDER BY date DESC;";
 
     sqlite3_stmt* stmt;
     int rc = sqlite3_prepare_v2(mDb, sql.c_str(), -1, &stmt, nullptr);
@@ -238,7 +274,17 @@ std::vector<Transaction> Database::GetAllTransactions() {
         wxDateTime date;
         date.ParseFormat(dateStr, "%Y-%m-%d");
 
-        transactions.emplace_back(id, date, libelle, somme, pointee, type);
+        Transaction trans(id, date, libelle, somme, pointee, type);
+
+        // Récupérer la date pointée si elle existe
+        if (sqlite3_column_type(stmt, 6) != SQLITE_NULL) {
+            std::string datePointeeStr = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6));
+            wxDateTime datePointee;
+            datePointee.ParseFormat(datePointeeStr, "%Y-%m-%d");
+            trans.SetDatePointee(datePointee);
+        }
+
+        transactions.push_back(trans);
     }
 
     sqlite3_finalize(stmt);
