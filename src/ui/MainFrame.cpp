@@ -25,11 +25,12 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
     EVT_LIST_ITEM_ACTIVATED(ID_TRANSACTION_LIST, MainFrame::OnTransactionDoubleClick)
     EVT_LIST_ITEM_RIGHT_CLICK(ID_TRANSACTION_LIST, MainFrame::OnTransactionRightClick)
+    EVT_LIST_COL_CLICK(ID_TRANSACTION_LIST, MainFrame::OnColumnClick)
 wxEND_EVENT_TABLE()
 
 MainFrame::MainFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(900, 600)),
-      mSommeEnLigne(0.0) {
+        mSommeEnLigne(0.0), mSortColumn(-1), mSortAscending(true) {
 
     mDatabase = std::make_unique<Database>("mescomptes.db");
     if (!mDatabase->Open()) {
@@ -145,9 +146,15 @@ void MainFrame::LoadTransactions() {
     mTransactionList->DeleteAllItems();
 
     Settings& settings = Settings::GetInstance();
-    auto transactions = mDatabase->GetAllTransactions();
-    for (size_t i = 0; i < transactions.size(); ++i) {
-        const auto& trans = transactions[i];
+    mCachedTransactions = mDatabase->GetAllTransactions();
+
+    // Appliquer le tri si une colonne est sélectionnée
+    if (mSortColumn >= 0) {
+        SortTransactions(mSortColumn);
+    }
+
+    for (size_t i = 0; i < mCachedTransactions.size(); ++i) {
+        const auto& trans = mCachedTransactions[i];
         long index = mTransactionList->InsertItem(i, settings.FormatDate(trans.GetDate()));
         mTransactionList->SetItem(index, 1, trans.GetLibelle());
 
@@ -565,4 +572,121 @@ void MainFrame::OnImportCSV(wxCommandEvent& event) {
         LoadTransactions();
         UpdateSummary();
     }
+}
+
+void MainFrame::OnColumnClick(wxListEvent& event) {
+    int column = event.GetColumn();
+
+    // Si on clique sur la même colonne, inverser l'ordre
+    if (column == mSortColumn) {
+        mSortAscending = !mSortAscending;
+    } else {
+        mSortColumn = column;
+        mSortAscending = true;
+    }
+
+    SortTransactions(column);
+    mTransactionList->DeleteAllItems();
+    Settings& settings = Settings::GetInstance();
+
+    for (size_t i = 0; i < mCachedTransactions.size(); ++i) {
+        const auto& trans = mCachedTransactions[i];
+        long index = mTransactionList->InsertItem(i, settings.FormatDate(trans.GetDate()));
+        mTransactionList->SetItem(index, 1, trans.GetLibelle());
+
+        // Afficher avec signe + ou - selon le type
+        bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
+        wxString sommeStr;
+        if (isDepense) {
+            sommeStr = "-" + settings.FormatMoney(trans.GetSomme());
+            mTransactionList->SetItemTextColour(index, wxColour(220, 100, 100));
+        } else {
+            sommeStr = "+" + settings.FormatMoney(trans.GetSomme());
+            mTransactionList->SetItemTextColour(index, wxColour(100, 180, 120));
+        }
+
+        mTransactionList->SetItem(index, 2, sommeStr);
+        mTransactionList->SetItem(index, 3, trans.IsPointee() ? "Oui" : "Non");
+
+        if (trans.IsPointee() && trans.GetDatePointee().IsValid()) {
+            mTransactionList->SetItem(index, 4, settings.FormatDate(trans.GetDatePointee()));
+        } else {
+            mTransactionList->SetItem(index, 4, "");
+        }
+
+        mTransactionList->SetItem(index, 5, trans.GetType());
+        mTransactionList->SetItemData(index, trans.GetId());
+    }
+}
+
+void MainFrame::SortTransactions(int column) {
+    if (mCachedTransactions.empty()) {
+        return;
+    }
+
+    // Créer un map pour stocker les types (dépense/recette) pour éviter les accès répétés à la DB
+    std::unordered_map<std::string, bool> typeCache;
+    for (const auto& trans : mCachedTransactions) {
+        if (typeCache.find(trans.GetType()) == typeCache.end()) {
+            typeCache[trans.GetType()] = mDatabase->IsTypeDepense(trans.GetType());
+        }
+    }
+
+    bool sortAscending = mSortAscending;
+
+    std::sort(mCachedTransactions.begin(), mCachedTransactions.end(),
+        [&typeCache, column, sortAscending](const Transaction& a, const Transaction& b) -> bool {
+            bool result = false;
+
+            switch (column) {
+                case 0: // Date
+                    result = a.GetDate().IsEarlierThan(b.GetDate());
+                    break;
+
+                case 1: // Libellé
+                    result = a.GetLibelle() < b.GetLibelle();
+                    break;
+
+                case 2: { // Somme
+                    // Prendre en compte le type (dépense/recette) pour le tri
+                    bool aIsDepense = typeCache.at(a.GetType());
+                    bool bIsDepense = typeCache.at(b.GetType());
+                    double aAmount = aIsDepense ? -a.GetSomme() : a.GetSomme();
+                    double bAmount = bIsDepense ? -b.GetSomme() : b.GetSomme();
+                    result = aAmount < bAmount;
+                    break;
+                }
+
+                case 3: // Pointée
+                    result = (!a.IsPointee() && b.IsPointee());
+                    break;
+
+                case 4: { // Date pointée
+                    // Les dates invalides vont en fin
+                    bool aValid = a.GetDatePointee().IsValid();
+                    bool bValid = b.GetDatePointee().IsValid();
+
+                    if (!aValid && !bValid) {
+                        result = false;
+                    } else if (!aValid) {
+                        result = false;
+                    } else if (!bValid) {
+                        result = true;
+                    } else {
+                        result = a.GetDatePointee().IsEarlierThan(b.GetDatePointee());
+                    }
+                    break;
+                }
+
+                case 5: // Type
+                    result = a.GetType() < b.GetType();
+                    break;
+
+                default:
+                    result = false;
+            }
+
+            // Inverser si tri décroissant
+            return sortAscending ? result : !result;
+        });
 }

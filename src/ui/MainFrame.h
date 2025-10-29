@@ -33,9 +33,12 @@ private:
     void OnSommeEnLigneChanged(wxCommandEvent& event);
     void OnTransactionDoubleClick(wxListEvent& event);
     void OnTransactionRightClick(wxListEvent& event);
+    void OnColumnClick(wxListEvent& event);
+
 
     // Helper methods
     void ShowTransactionDialog(Transaction* existingTransaction = nullptr);
+    void SortTransactions(int column);
 
     // Widgets
     wxListCtrl* mTransactionList;
@@ -47,6 +50,11 @@ private:
     // Database
     std::unique_ptr<Database> mDatabase;
     double mSommeEnLigne;
+
+    // Sorting
+    int mSortColumn;
+    bool mSortAscending;
+    std::vector<Transaction> mCachedTransactions;
 
     wxDECLARE_EVENT_TABLE();
 };
