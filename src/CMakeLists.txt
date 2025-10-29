@@ -30,6 +30,7 @@ set(SOURCES
         ui/InfoDialog.cpp
         ui/CSVImportDialog.cpp
         core/Database.cpp
+        core/Settings.cpp
         core/Transaction.cpp
 )
 

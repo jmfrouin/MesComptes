@@ -13,6 +13,7 @@
 #include <sstream>
 
 #include "core/version.h"
+#include "core/Settings.h"
 
 wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(wxID_EXIT, MainFrame::OnQuit)
@@ -143,21 +144,22 @@ void MainFrame::CreateControls() {
 void MainFrame::LoadTransactions() {
     mTransactionList->DeleteAllItems();
 
+    Settings& settings = Settings::GetInstance();
     auto transactions = mDatabase->GetAllTransactions();
     for (size_t i = 0; i < transactions.size(); ++i) {
         const auto& trans = transactions[i];
-        long index = mTransactionList->InsertItem(i, trans.GetDate().Format("%Y-%m-%d"));
+        long index = mTransactionList->InsertItem(i, settings.FormatDate(trans.GetDate()));
         mTransactionList->SetItem(index, 1, trans.GetLibelle());
 
         // Afficher avec signe + ou - selon le type
         bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
         wxString sommeStr;
         if (isDepense) {
-            sommeStr = wxString::Format("-%.2f", trans.GetSomme());
+            sommeStr = "-" + settings.FormatMoney(trans.GetSomme());
             // Rouge pastel (salmon/coral)
             mTransactionList->SetItemTextColour(index, wxColour(220, 100, 100));
         } else {
-            sommeStr = wxString::Format("+%.2f", trans.GetSomme());
+            sommeStr = "+" + settings.FormatMoney(trans.GetSomme());
             // Vert pastel
             mTransactionList->SetItemTextColour(index, wxColour(100, 180, 120));
         }
@@ -167,7 +169,7 @@ void MainFrame::LoadTransactions() {
 
         // Afficher la date pointée si elle existe
         if (trans.IsPointee() && trans.GetDatePointee().IsValid()) {
-            mTransactionList->SetItem(index, 4, trans.GetDatePointee().Format("%Y-%m-%d"));
+            mTransactionList->SetItem(index, 4, settings.FormatDate(trans.GetDatePointee()));
         } else {
             mTransactionList->SetItem(index, 4, "");
         }
@@ -178,13 +180,14 @@ void MainFrame::LoadTransactions() {
 }
 
 void MainFrame::UpdateSummary() {
+    Settings& settings = Settings::GetInstance();
     double restant = mDatabase->GetTotalRestant();
     double pointee = mDatabase->GetTotalPointee();
     double diff = pointee - (restant - mSommeEnLigne);
 
-    mRestantText->SetValue(wxString::Format("%.2f €", restant));
-    mPointeeText->SetValue(wxString::Format("%.2f €", pointee));
-    mDiffText->SetValue(wxString::Format("%.2f €", diff));
+    mRestantText->SetValue(settings.FormatMoney(restant) + " €");
+    mPointeeText->SetValue(settings.FormatMoney(pointee) + " €");
+    mDiffText->SetValue(settings.FormatMoney(diff) + " €");
 }
 
 void MainFrame::OnQuit(wxCommandEvent& event) {
