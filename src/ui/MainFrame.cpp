@@ -109,13 +109,11 @@ void MainFrame::CreateControls() {
     gridSizer->AddGrowableCol(1);
 
     gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Restant:"), 0, wxALIGN_CENTER_VERTICAL);
-    mRestantText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition,
-                                   wxDefaultSize, wxTE_READONLY);
+    mRestantText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
     gridSizer->Add(mRestantText, 1, wxEXPAND);
 
     gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Somme pointée:"), 0, wxALIGN_CENTER_VERTICAL);
-    mPointeeText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition,
-                                   wxDefaultSize, wxTE_READONLY);
+    mPointeeText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
     gridSizer->Add(mPointeeText, 1, wxEXPAND);
 
     gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Somme en ligne:"), 0, wxALIGN_CENTER_VERTICAL);
