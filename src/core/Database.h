@@ -48,6 +48,12 @@ public:
     int GetTransactionCount();
     std::string GetDatabaseInfo();
 
+    // Importation CSV
+    bool ImportTransactionsFromCSV(const std::vector<std::vector<std::string>>& csvData,
+                                   int dateColumn, int libelleColumn, int sommeColumn,
+                                   int typeColumn, const std::string& defaultType,
+                                   bool pointeeByDefault);
+
 private:
     bool CreateTables();
     bool InitializeDefaultTypes();

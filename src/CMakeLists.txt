@@ -28,6 +28,7 @@ set(SOURCES
         ui/MainFrame.cpp
         ui/PreferencesDialog.cpp
         ui/InfoDialog.cpp
+        ui/CSVImportDialog.cpp
         core/Database.cpp
         core/Transaction.cpp
 )

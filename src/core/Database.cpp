@@ -416,3 +416,75 @@ std::string Database::GetDatabaseInfo() {
     info << "Total pointé : " << GetTotalPointee() << " €\n";
     return info.str();
 }
+
+bool Database::ImportTransactionsFromCSV(const std::vector<std::vector<std::string>>& csvData,
+                                         int dateColumn, int libelleColumn, int sommeColumn,
+                                         int typeColumn, const std::string& defaultType,
+                                         bool pointeeByDefault) {
+    int successCount = 0;
+    int errorCount = 0;
+
+    for (const auto& row : csvData) {
+        if (dateColumn >= (int)row.size() || libelleColumn >= (int)row.size() || sommeColumn >= (int)row.size()) {
+            errorCount++;
+            continue;
+        }
+
+        try {
+            Transaction trans;
+
+            // Parser la date
+            wxDateTime date;
+            wxString dateStr = wxString::FromUTF8(row[dateColumn]);
+
+            // Essayer plusieurs formats de date
+            if (!date.ParseFormat(dateStr, "%Y-%m-%d") &&
+                !date.ParseFormat(dateStr, "%d/%m/%Y") &&
+                !date.ParseFormat(dateStr, "%d-%m-%Y") &&
+                !date.ParseFormat(dateStr, "%Y/%m/%d")) {
+                errorCount++;
+                continue;
+            }
+            trans.SetDate(date);
+
+            // Libellé
+            trans.SetLibelle(row[libelleColumn]);
+
+            // Somme - gérer virgule et point
+            std::string sommeStr = row[sommeColumn];
+            std::replace(sommeStr.begin(), sommeStr.end(), ',', '.');
+
+            // Supprimer les espaces
+            sommeStr.erase(std::remove_if(sommeStr.begin(), sommeStr.end(), ::isspace), sommeStr.end());
+
+            double somme = 0.0;
+            try {
+                somme = std::stod(sommeStr);
+            } catch (...) {
+                errorCount++;
+                continue;
+            }
+            trans.SetSomme(std::abs(somme)); // Prendre la valeur absolue
+
+            // Type
+            std::string type = defaultType;
+            if (typeColumn >= 0 && typeColumn < (int)row.size() && !row[typeColumn].empty()) {
+                type = row[typeColumn];
+            }
+            trans.SetType(type);
+
+            // Pointée
+            trans.SetPointee(pointeeByDefault);
+
+            if (AddTransaction(trans)) {
+                successCount++;
+            } else {
+                errorCount++;
+            }
+        } catch (...) {
+            errorCount++;
+        }
+    }
+
+    return errorCount == 0;
+}

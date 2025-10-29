@@ -5,8 +5,12 @@
 #include "MainFrame.h"
 #include "PreferencesDialog.h"
 #include "InfoDialog.h"
+#include "CSVImportDialog.h"
 #include <wx/stattext.h>
 #include <wx/datectrl.h>
+#include <wx/progdlg.h>
+#include <fstream>
+#include <sstream>
 
 #include "core/version.h"
 
@@ -14,6 +18,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(wxID_EXIT, MainFrame::OnQuit)
     EVT_MENU(ID_PREFERENCES, MainFrame::OnPreferences)
     EVT_MENU(ID_INFO, MainFrame::OnInfo)
+    EVT_MENU(ID_IMPORT_CSV, MainFrame::OnImportCSV)
     EVT_MENU(wxID_ABOUT, MainFrame::OnAbout)
     EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
     EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
@@ -24,7 +29,7 @@ wxEND_EVENT_TABLE()
 MainFrame::MainFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(900, 600)),
       mSommeEnLigne(0.0) {
-    
+
     mDatabase = std::make_unique<Database>("mescomptes.db");
     if (!mDatabase->Open()) {
         wxMessageBox("Erreur lors de l'ouverture de la base de données",
@@ -50,6 +55,9 @@ void MainFrame::CreateMenuBar() {
     wxMenu* menuFile = new wxMenu;
     menuFile->Append(ID_ADD_TRANSACTION, "&Nouvelle transaction\tCtrl-N",
                      "Ajouter une nouvelle transaction");
+    menuFile->AppendSeparator();
+    menuFile->Append(ID_IMPORT_CSV, "&Importer depuis CSV\tCtrl-I",
+                     "Importer des transactions depuis un fichier CSV");
     menuFile->AppendSeparator();
     menuFile->Append(ID_PREFERENCES, "&Préférences\tCtrl-P",
                      "Gérer les types de transactions");
@@ -133,13 +141,13 @@ void MainFrame::CreateControls() {
 
 void MainFrame::LoadTransactions() {
     mTransactionList->DeleteAllItems();
-    
+
     auto transactions = mDatabase->GetAllTransactions();
     for (size_t i = 0; i < transactions.size(); ++i) {
         const auto& trans = transactions[i];
         long index = mTransactionList->InsertItem(i, trans.GetDate().Format("%Y-%m-%d"));
         mTransactionList->SetItem(index, 1, trans.GetLibelle());
-        
+
         // Afficher avec signe + ou - selon le type
         bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
         wxString sommeStr;
@@ -152,7 +160,7 @@ void MainFrame::LoadTransactions() {
             // Vert pastel
             mTransactionList->SetItemTextColour(index, wxColour(100, 180, 120));
         }
-        
+
         mTransactionList->SetItem(index, 2, sommeStr);
         mTransactionList->SetItem(index, 3, trans.IsPointee() ? "Oui" : "Non");
         mTransactionList->SetItem(index, 4, trans.GetType());
@@ -187,9 +195,9 @@ void MainFrame::OnInfo(wxCommandEvent& event) {
 void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     bool isEdit = (existingTransaction != nullptr);
     wxString dialogTitle = isEdit ? "Modifier une transaction" : "Ajouter une transaction";
-    
+
     wxDialog dialog(this, wxID_ANY, dialogTitle, wxDefaultPosition, wxSize(400, 300));
-    
+
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
     wxFlexGridSizer* gridSizer = new wxFlexGridSizer(5, 2, 5, 10);
     gridSizer->AddGrowableCol(1);
@@ -234,7 +242,7 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     for (size_t i = 0; i < types.size(); ++i) {
         wxString displayName = types[i].mNom + (types[i].mIsDepense ? " (Dépense)" : " (Recette)");
         typeChoice->Append(displayName, new wxStringClientData(types[i].mNom));
-        
+
         if (isEdit && types[i].mNom == existingTransaction->GetType()) {
             selectedIndex = i;
         }
@@ -260,17 +268,17 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
         if (isEdit) {
             trans.SetId(existingTransaction->GetId());
         }
-        
+
         trans.SetDate(datePicker->GetValue());
         trans.SetLibelle(libelleText->GetValue().ToStdString());
-        
+
         double somme;
         if (sommeText->GetValue().ToDouble(&somme)) {
             trans.SetSomme(somme);
         }
-        
+
         trans.SetPointee(pointeeCheck->GetValue());
-        
+
         // Récupérer le nom réel du type (sans le suffixe)
         wxStringClientData* data = static_cast<wxStringClientData*>(
             typeChoice->GetClientObject(typeChoice->GetSelection())
@@ -288,7 +296,7 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
             LoadTransactions();
             UpdateSummary();
         } else {
-            wxMessageBox(isEdit ? "Erreur lors de la modification de la transaction" 
+            wxMessageBox(isEdit ? "Erreur lors de la modification de la transaction"
                                 : "Erreur lors de l'ajout de la transaction",
                          "Erreur", wxOK | wxICON_ERROR);
         }
@@ -307,7 +315,7 @@ void MainFrame::OnDeleteTransaction(wxCommandEvent& event) {
     }
 
     int transactionId = mTransactionList->GetItemData(selectedItem);
-    
+
     if (wxMessageBox("Êtes-vous sûr de vouloir supprimer cette transaction?",
                      "Confirmation", wxYES_NO | wxICON_QUESTION) == wxYES) {
         if (mDatabase->DeleteTransaction(transactionId)) {
@@ -319,6 +327,8 @@ void MainFrame::OnDeleteTransaction(wxCommandEvent& event) {
         }
     }
 }
+
+
 
 void MainFrame::OnTogglePointee(wxCommandEvent& event) {
     long selectedItem = mTransactionList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
@@ -357,7 +367,7 @@ void MainFrame::OnTransactionDoubleClick(wxListEvent& event) {
 
     int transactionId = mTransactionList->GetItemData(selectedItem);
     auto transactions = mDatabase->GetAllTransactions();
-    
+
     for (auto& trans : transactions) {
         if (trans.GetId() == transactionId && !trans.IsPointee()) {
             ShowTransactionDialog(&trans);
@@ -419,4 +429,118 @@ void MainFrame::OnTransactionRightClick(wxListEvent& event) {
 
     // Afficher le menu à la position du curseur
     PopupMenu(&contextMenu);
+}
+
+void MainFrame::OnImportCSV(wxCommandEvent& event) {
+    wxFileDialog openFileDialog(this, "Ouvrir un fichier CSV", "", "",
+                                "Fichiers CSV (*.csv)|*.csv|Tous les fichiers (*.*)|*.*",
+                                wxFD_OPEN | wxFD_FILE_MUST_EXIST);
+
+    if (openFileDialog.ShowModal() == wxID_CANCEL) {
+        return;
+    }
+
+    wxString filePath = openFileDialog.GetPath();
+
+    // Lire le fichier CSV
+    std::ifstream file(filePath.ToStdString());
+    if (!file.is_open()) {
+        wxMessageBox("Impossible d'ouvrir le fichier", "Erreur", wxOK | wxICON_ERROR);
+        return;
+    }
+
+    // Dialogue pour choisir le séparateur initialement
+    wxArrayString separators;
+    separators.Add("Point-virgule (;)");
+    separators.Add("Virgule (,)");
+    separators.Add("Tabulation");
+
+    int sepChoice = wxGetSingleChoiceIndex("Sélectionnez le séparateur utilisé dans le CSV:",
+                                           "Séparateur CSV", separators, this);
+    if (sepChoice == -1) {
+        return;
+    }
+
+    char separator = ';';
+    switch (sepChoice) {
+        case 0: separator = ';'; break;
+        case 1: separator = ','; break;
+        case 2: separator = '\t'; break;
+    }
+
+    // Parser le CSV
+    std::vector<std::string> headers;
+    std::vector<std::vector<std::string>> csvData;
+    std::string line;
+    bool firstLine = true;
+
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+
+        std::vector<std::string> row;
+        std::stringstream ss(line);
+        std::string cell;
+
+        while (std::getline(ss, cell, separator)) {
+            // Supprimer les guillemets si présents
+            if (!cell.empty() && cell.front() == '"' && cell.back() == '"') {
+                cell = cell.substr(1, cell.length() - 2);
+            }
+            row.push_back(cell);
+        }
+
+        if (firstLine) {
+            headers = row;
+            firstLine = false;
+        } else {
+            csvData.push_back(row);
+        }
+    }
+    file.close();
+
+    if (headers.empty() || csvData.empty()) {
+        wxMessageBox("Le fichier CSV est vide ou mal formaté", "Erreur", wxOK | wxICON_ERROR);
+        return;
+    }
+
+    // Afficher le dialogue de mapping
+    CSVImportDialog mappingDialog(this, mDatabase.get(), headers, csvData);
+    if (mappingDialog.ShowModal() != wxID_OK || !mappingDialog.IsImportConfirmed()) {
+        return;
+    }
+
+    auto mapping = mappingDialog.GetMapping();
+
+    // Importer les données
+    wxProgressDialog progress("Importation en cours",
+                             "Importation des transactions...",
+                             csvData.size(),
+                             this,
+                             wxPD_APP_MODAL | wxPD_AUTO_HIDE);
+
+    bool success = mDatabase->ImportTransactionsFromCSV(
+        csvData,
+        mapping.dateColumn,
+        mapping.libelleColumn,
+        mapping.sommeColumn,
+        mapping.typeColumn,
+        mapping.defaultType,
+        mapping.pointeeByDefault
+    );
+
+    progress.Update(csvData.size());
+
+    if (success) {
+        wxMessageBox(wxString::Format("Importation réussie : %zu transactions importées",
+                                     csvData.size()),
+                    "Succès", wxOK | wxICON_INFORMATION);
+        LoadTransactions();
+        UpdateSummary();
+    } else {
+        wxMessageBox("L'importation s'est terminée avec des erreurs.\n"
+                    "Certaines transactions n'ont pas pu être importées.",
+                    "Attention", wxOK | wxICON_WARNING);
+        LoadTransactions();
+        UpdateSummary();
+    }
 }

@@ -28,6 +28,7 @@ private:
     void OnAbout(wxCommandEvent& event);
     void OnAddTransaction(wxCommandEvent& event);
     void OnDeleteTransaction(wxCommandEvent& event);
+    void OnImportCSV(wxCommandEvent& event);
     void OnTogglePointee(wxCommandEvent& event);
     void OnSommeEnLigneChanged(wxCommandEvent& event);
     void OnTransactionDoubleClick(wxListEvent& event);
@@ -55,6 +56,7 @@ enum {
     ID_PREFERENCES = wxID_HIGHEST + 1,
     ID_INFO,
     ID_ADD_TRANSACTION,
+    ID_IMPORT_CSV,
     ID_DELETE_TRANSACTION,
     ID_TOGGLE_POINTEE,
     ID_SOMME_EN_LIGNE,
