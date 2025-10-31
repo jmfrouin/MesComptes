@@ -13,6 +13,10 @@ class Transaction {
         Transaction();
         Transaction(int id, const wxDateTime& date, const std::string& libelle,
                     double somme, bool pointee, const std::string& type);
+        //Copy constructor
+        Transaction(const Transaction& other);
+        //Affectation operator
+        Transaction& operator=(const Transaction& other);
 
         // Getters
         int GetId() const { return mId; }

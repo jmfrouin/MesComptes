@@ -620,73 +620,61 @@ void MainFrame::OnColumnClick(wxListEvent& event) {
 }
 
 void MainFrame::SortTransactions(int column) {
-    if (mCachedTransactions.empty()) {
-        return;
-    }
-
-    // Créer un map pour stocker les types (dépense/recette) pour éviter les accès répétés à la DB
-    std::unordered_map<std::string, bool> typeCache;
-    for (const auto& trans : mCachedTransactions) {
-        if (typeCache.find(trans.GetType()) == typeCache.end()) {
-            typeCache[trans.GetType()] = mDatabase->IsTypeDepense(trans.GetType());
-        }
-    }
-
-    bool sortAscending = mSortAscending;
-
     std::sort(mCachedTransactions.begin(), mCachedTransactions.end(),
-        [&typeCache, column, sortAscending](const Transaction& a, const Transaction& b) -> bool {
+        [this, column](const Transaction& a, const Transaction& b) -> bool {
             bool result = false;
 
             switch (column) {
                 case 0: // Date
-                    result = a.GetDate().IsEarlierThan(b.GetDate());
+                    result = a.GetDate() < b.GetDate();
                     break;
 
                 case 1: // Libellé
                     result = a.GetLibelle() < b.GetLibelle();
                     break;
 
-                case 2: { // Somme
-                    // Prendre en compte le type (dépense/recette) pour le tri
-                    bool aIsDepense = typeCache.at(a.GetType());
-                    bool bIsDepense = typeCache.at(b.GetType());
-                    double aAmount = aIsDepense ? -a.GetSomme() : a.GetSomme();
-                    double bAmount = bIsDepense ? -b.GetSomme() : b.GetSomme();
-                    result = aAmount < bAmount;
+                case 2: // Somme
+                    result = a.GetSomme() < b.GetSomme();
                     break;
-                }
 
                 case 3: // Pointée
-                    result = (!a.IsPointee() && b.IsPointee());
-                    break;
-
-                case 4: { // Date pointée
-                    // Les dates invalides vont en fin
-                    bool aValid = a.GetDatePointee().IsValid();
-                    bool bValid = b.GetDatePointee().IsValid();
-
-                    if (!aValid && !bValid) {
-                        result = false;
-                    } else if (!aValid) {
-                        result = false;
-                    } else if (!bValid) {
-                        result = true;
+                    if (a.IsPointee() != b.IsPointee()) {
+                        result = !a.IsPointee(); // Non pointées en premier
                     } else {
-                        result = a.GetDatePointee().IsEarlierThan(b.GetDatePointee());
+                        result = a.GetDate() < b.GetDate(); // Tri secondaire par date
                     }
                     break;
-                }
+
+                case 4: // Date pointée
+                    if (a.IsPointee() && b.IsPointee()) {
+                        if (a.GetDatePointee().IsValid() && b.GetDatePointee().IsValid()) {
+                            result = a.GetDatePointee() < b.GetDatePointee();
+                        } else if (a.GetDatePointee().IsValid()) {
+                            result = true;
+                        } else if (b.GetDatePointee().IsValid()) {
+                            result = false;
+                        } else {
+                            result = a.GetDate() < b.GetDate();
+                        }
+                    } else if (a.IsPointee()) {
+                        result = true;
+                    } else if (b.IsPointee()) {
+                        result = false;
+                    } else {
+                        result = a.GetDate() < b.GetDate();
+                    }
+                    break;
 
                 case 5: // Type
                     result = a.GetType() < b.GetType();
                     break;
 
                 default:
-                    result = false;
+                    result = a.GetId() < b.GetId();
+                    break;
             }
 
-            // Inverser si tri décroissant
-            return sortAscending ? result : !result;
+            // Inverser le résultat si tri descendant
+            return mSortAscending ? result : !result;
         });
 }
