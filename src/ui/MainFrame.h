@@ -39,6 +39,7 @@ private:
     // Helper methods
     void ShowTransactionDialog(Transaction* existingTransaction = nullptr);
     void SortTransactions(int column);
+    void UpdateColumnHeaders();
 
     // Widgets
     wxListCtrl* mTransactionList;

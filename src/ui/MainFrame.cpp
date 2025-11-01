@@ -586,6 +586,10 @@ void MainFrame::OnColumnClick(wxListEvent& event) {
     }
 
     SortTransactions(column);
+
+    // Mettre à jour les titres des colonnes avec l'indicateur de tri
+    UpdateColumnHeaders();
+
     mTransactionList->DeleteAllItems();
     Settings& settings = Settings::GetInstance();
 
@@ -620,7 +624,7 @@ void MainFrame::OnColumnClick(wxListEvent& event) {
 }
 
 void MainFrame::SortTransactions(int column) {
-    std::sort(mCachedTransactions.begin(), mCachedTransactions.end(),
+    std::stable_sort(mCachedTransactions.begin(), mCachedTransactions.end(),
         [this, column](const Transaction& a, const Transaction& b) -> bool {
             bool result = false;
 
@@ -677,4 +681,32 @@ void MainFrame::SortTransactions(int column) {
             // Inverser le résultat si tri descendant
             return mSortAscending ? result : !result;
         });
+}
+
+void MainFrame::UpdateColumnHeaders() {
+    // Titres de colonnes de base
+    wxString columnTitles[] = {
+        "Date",
+        "Libellé",
+        "Somme",
+        "Pointée",
+        "Date pointée",
+        "Type"
+    };
+
+    // Mettre à jour chaque colonne
+    for (int i = 0; i < 6; ++i) {
+        wxListItem col;
+        col.SetMask(wxLIST_MASK_TEXT);
+
+        if (i == mSortColumn) {
+            // Ajouter l'indicateur de tri à la colonne active
+            wxString indicator = mSortAscending ? " ▲" : " ▼";
+            col.SetText(columnTitles[i] + indicator);
+        } else {
+            col.SetText(columnTitles[i]);
+        }
+
+        mTransactionList->SetColumn(i, col);
+    }
 }
