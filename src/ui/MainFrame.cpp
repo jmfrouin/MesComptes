@@ -25,6 +25,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
     EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
     EVT_TEXT(ID_SEARCH_BOX, MainFrame::OnSearchChanged)
+    EVT_SEARCHCTRL_CANCEL_BTN(ID_SEARCH_BOX, MainFrame::OnSearchChanged)
     EVT_LIST_ITEM_ACTIVATED(ID_TRANSACTION_LIST, MainFrame::OnTransactionDoubleClick)
     EVT_LIST_ITEM_RIGHT_CLICK(ID_TRANSACTION_LIST, MainFrame::OnTransactionRightClick)
     EVT_LIST_COL_CLICK(ID_TRANSACTION_LIST, MainFrame::OnColumnClick)
@@ -135,29 +136,38 @@ void MainFrame::CreateControls() {
 
     mainSizer->Add(mTransactionList, 1, wxALL | wxEXPAND, 5);
 
-    // Panneau de résumé
-    wxStaticBoxSizer* summarySizer = new wxStaticBoxSizer(wxVERTICAL, panel, "Résumé");
-    wxFlexGridSizer* gridSizer = new wxFlexGridSizer(4, 2, 5, 10);
-    gridSizer->AddGrowableCol(1);
+    // Panneau de résumé avec disposition horizontale
+    wxStaticBoxSizer* summarySizer = new wxStaticBoxSizer(wxHORIZONTAL, panel, "Résumé");
+    
+    // Partie gauche (2x2)
+    wxFlexGridSizer* leftGridSizer = new wxFlexGridSizer(2, 2, 5, 10);
+    leftGridSizer->AddGrowableCol(1);
 
-    gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Restant:"), 0, wxALIGN_CENTER_VERTICAL);
+    leftGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Restant:"), 0, wxALIGN_CENTER_VERTICAL);
     mRestantText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
-    gridSizer->Add(mRestantText, 1, wxEXPAND);
+    leftGridSizer->Add(mRestantText, 1, wxEXPAND);
 
-    gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Somme pointée:"), 0, wxALIGN_CENTER_VERTICAL);
+    leftGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Somme pointée:"), 0, wxALIGN_CENTER_VERTICAL);
     mPointeeText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
-    gridSizer->Add(mPointeeText, 1, wxEXPAND);
+    leftGridSizer->Add(mPointeeText, 1, wxEXPAND);
 
-    gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Somme en ligne:"), 0, wxALIGN_CENTER_VERTICAL);
+    summarySizer->Add(leftGridSizer, 1, wxALL | wxEXPAND, 5);
+
+    // Partie droite (2x2)
+    wxFlexGridSizer* rightGridSizer = new wxFlexGridSizer(2, 2, 5, 10);
+    rightGridSizer->AddGrowableCol(1);
+
+    rightGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Somme en ligne:"), 0, wxALIGN_CENTER_VERTICAL);
     mSommeEnLigneText = new wxTextCtrl(panel, ID_SOMME_EN_LIGNE, "0.00");
-    gridSizer->Add(mSommeEnLigneText, 1, wxEXPAND);
+    rightGridSizer->Add(mSommeEnLigneText, 1, wxEXPAND);
 
-    gridSizer->Add(new wxStaticText(panel, wxID_ANY, "Diff:"), 0, wxALIGN_CENTER_VERTICAL);
+    rightGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Diff:"), 0, wxALIGN_CENTER_VERTICAL);
     mDiffText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition,
                                 wxDefaultSize, wxTE_READONLY);
-    gridSizer->Add(mDiffText, 1, wxEXPAND);
+    rightGridSizer->Add(mDiffText, 1, wxEXPAND);
 
-    summarySizer->Add(gridSizer, 1, wxALL | wxEXPAND, 5);
+    summarySizer->Add(rightGridSizer, 1, wxALL | wxEXPAND, 5);
+
     mainSizer->Add(summarySizer, 0, wxALL | wxEXPAND, 5);
 
     panel->SetSizer(mainSizer);
