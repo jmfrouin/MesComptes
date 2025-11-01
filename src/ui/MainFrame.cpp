@@ -13,6 +13,7 @@
 #include <fstream>
 #include <sstream>
 
+#include "RecurringDialog.h"
 #include "core/version.h"
 #include "core/Settings.h"
 
@@ -25,11 +26,8 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
     EVT_MENU(ID_RAPPROCHEMENT, MainFrame::OnRapprochement)
     EVT_MENU(ID_HIDE_POINTEES, MainFrame::OnToggleHidePointees)
+    EVT_MENU(ID_MANAGE_RECURRING, MainFrame::OnManageRecurring)  // NOUVEAU
     EVT_UPDATE_UI(ID_HIDE_POINTEES, MainFrame::OnUpdateToggleHidePointees)
-    EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
-    EVT_TEXT(ID_SEARCH_BOX, MainFrame::OnSearchChanged)
-    EVT_SEARCHCTRL_CANCEL_BTN(ID_SEARCH_BOX, MainFrame::OnSearchChanged)
-    EVT_LIST_ITEM_ACTIVATED(ID_TRANSACTION_LIST, MainFrame::OnTransactionDoubleClick)
     EVT_LIST_ITEM_RIGHT_CLICK(ID_TRANSACTION_LIST, MainFrame::OnTransactionRightClick)
     EVT_LIST_COL_CLICK(ID_TRANSACTION_LIST, MainFrame::OnColumnClick)
     EVT_LIST_ITEM_CHECKED(ID_TRANSACTION_LIST, MainFrame::OnRapprochementItemChecked)
@@ -45,6 +43,13 @@ MainFrame::MainFrame(const wxString& title)
     if (!mDatabase->Open()) {
         wxMessageBox("Erreur lors de l'ouverture de la base de données",
                      "Erreur", wxOK | wxICON_ERROR);
+    }
+    
+    // Exécuter les transactions récurrentes en attente
+    int executedCount = mDatabase->ExecutePendingRecurringTransactions();
+    if (executedCount > 0) {
+        wxMessageBox(wxString::Format("%d transaction(s) récurrente(s) ajoutée(s)", executedCount),
+                    "Transactions récurrentes", wxOK | wxICON_INFORMATION);
     }
 
     // Définir l'icône de l'application
@@ -75,6 +80,9 @@ void MainFrame::CreateMenuBar() {
     menuFile->AppendSeparator();
     menuFile->Append(ID_IMPORT_CSV, "&Importer depuis CSV\tCtrl-I",
                      "Importer des transactions depuis un fichier CSV");
+    menuFile->AppendSeparator();
+    menuFile->Append(ID_MANAGE_RECURRING, "Gérer les &récurrences\tCtrl-T",
+                     "Gérer les transactions récurrentes");
     menuFile->AppendSeparator();
     menuFile->Append(ID_PREFERENCES, "&Préférences\tCtrl-P",
                      "Gérer les types de transactions");
@@ -410,7 +418,15 @@ void MainFrame::OnDeleteTransaction(wxCommandEvent& event) {
     }
 }
 
+void MainFrame::OnManageRecurring(wxCommandEvent& event) {
+    RecurringDialog dialog(this, mDatabase.get());
+    dialog.ShowModal();
 
+    // Recharger les transactions après la fermeture du dialogue
+    // (au cas où des transactions récurrentes auraient été exécutées)
+    LoadTransactions();
+    UpdateSummary();
+}
 
 void MainFrame::OnTogglePointee(wxCommandEvent& event) {
     long selectedItem = mTransactionList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);

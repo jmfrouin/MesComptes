@@ -9,6 +9,7 @@
 #include <vector>
 #include <sqlite3.h>
 #include "Transaction.h"
+#include "RecurringTransaction.h"
 
 // Structure pour représenter un type avec son attribut
 struct TransactionType {
@@ -53,6 +54,16 @@ public:
                                    int dateColumn, int libelleColumn, int sommeColumn,
                                    int typeColumn, const std::string& defaultType,
                                    bool pointeeByDefault);
+
+    // Méthodes pour les transactions récurrentes
+    bool AddRecurringTransaction(const RecurringTransaction& trans);
+    bool UpdateRecurringTransaction(const RecurringTransaction& trans);
+    bool DeleteRecurringTransaction(int id);
+    std::vector<RecurringTransaction> GetAllRecurringTransactions();
+    RecurringTransaction GetRecurringTransaction(int id);
+    
+    // Exécute les transactions récurrentes dues
+    int ExecutePendingRecurringTransactions();
 
 private:
     bool CreateTables();

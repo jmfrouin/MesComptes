@@ -29,6 +29,7 @@ private:
     void OnAbout(wxCommandEvent& event);
     void OnAddTransaction(wxCommandEvent& event);
     void OnDeleteTransaction(wxCommandEvent& event);
+    void OnManageRecurring(wxCommandEvent& event);
     void OnImportCSV(wxCommandEvent& event);
     void OnTogglePointee(wxCommandEvent& event);
     void OnSommeEnLigneChanged(wxCommandEvent& event);
@@ -89,7 +90,8 @@ enum {
     ID_TRANSACTION_LIST,
     ID_SEARCH_BOX,
     ID_RAPPROCHEMENT,
-    ID_HIDE_POINTEES
+    ID_HIDE_POINTEES,
+    ID_MANAGE_RECURRING  // NOUVEAU
 };
 
 #endif // MAINFRAME_H

@@ -29,9 +29,11 @@ set(SOURCES
         ui/PreferencesDialog.cpp
         ui/InfoDialog.cpp
         ui/CSVImportDialog.cpp
+        ui/RecurringDialog.cpp
         core/Database.cpp
         core/Settings.cpp
         core/Transaction.cpp
+        core/RecurringTransaction.cpp
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

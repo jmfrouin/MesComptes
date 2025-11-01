@@ -37,37 +37,57 @@ void Database::Close() {
 }
 
 bool Database::CreateTables() {
-    const char* sqlTransactions = R"(
+    const char* createTransactionsTable = R"(
         CREATE TABLE IF NOT EXISTS transactions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             date TEXT NOT NULL,
             libelle TEXT NOT NULL,
             somme REAL NOT NULL,
-            pointee INTEGER NOT NULL,
+            pointee INTEGER DEFAULT 0,
             type TEXT NOT NULL,
             date_pointee TEXT
         );
     )";
 
-    const char* sqlTypes = R"(
+    const char* createTypesTable = R"(
         CREATE TABLE IF NOT EXISTS types (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nom TEXT UNIQUE NOT NULL,
-            is_depense INTEGER NOT NULL DEFAULT 1
+            is_depense INTEGER DEFAULT 1
+        );
+    )";
+
+    const char* createRecurringTable = R"(
+        CREATE TABLE IF NOT EXISTS recurring_transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            libelle TEXT NOT NULL,
+            somme REAL NOT NULL,
+            type TEXT NOT NULL,
+            recurrence_type INTEGER NOT NULL,
+            start_date TEXT NOT NULL,
+            end_date TEXT,
+            last_executed TEXT,
+            day_of_month INTEGER DEFAULT 1,
+            active INTEGER DEFAULT 1
         );
     )";
 
     char* errMsg = nullptr;
-    int rc = sqlite3_exec(mDb, sqlTransactions, nullptr, nullptr, &errMsg);
-    if (rc != SQLITE_OK) {
-        std::cerr << "Erreur SQL: " << errMsg << std::endl;
+    
+    if (sqlite3_exec(mDb, createTransactionsTable, nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        std::cerr << "Erreur création table transactions: " << errMsg << std::endl;
         sqlite3_free(errMsg);
         return false;
     }
 
-    rc = sqlite3_exec(mDb, sqlTypes, nullptr, nullptr, &errMsg);
-    if (rc != SQLITE_OK) {
-        std::cerr << "Erreur SQL: " << errMsg << std::endl;
+    if (sqlite3_exec(mDb, createTypesTable, nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        std::cerr << "Erreur création table types: " << errMsg << std::endl;
+        sqlite3_free(errMsg);
+        return false;
+    }
+
+    if (sqlite3_exec(mDb, createRecurringTable, nullptr, nullptr, &errMsg) != SQLITE_OK) {
+        std::cerr << "Erreur création table recurring_transactions: " << errMsg << std::endl;
         sqlite3_free(errMsg);
         return false;
     }
@@ -461,6 +481,162 @@ std::string Database::GetDatabaseInfo() {
     info << "Total restant : " << GetTotalRestant() << " €\n";
     info << "Total pointé : " << GetTotalPointee() << " €\n";
     return info.str();
+}
+
+bool Database::AddRecurringTransaction(const RecurringTransaction& trans) {
+    const char* sql = R"(
+        INSERT INTO recurring_transactions 
+        (libelle, somme, type, recurrence_type, start_date, end_date, day_of_month, active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+    )";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(mDb, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, trans.GetLibelle().c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(stmt, 2, trans.GetSomme());
+    sqlite3_bind_text(stmt, 3, trans.GetType().c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 4, static_cast<int>(trans.GetRecurrence()));
+    sqlite3_bind_text(stmt, 5, trans.GetStartDate().FormatISODate().mb_str(), -1, SQLITE_TRANSIENT);
+    
+    if (trans.GetEndDate().IsValid()) {
+        sqlite3_bind_text(stmt, 6, trans.GetEndDate().FormatISODate().mb_str(), -1, SQLITE_TRANSIENT);
+    } else {
+        sqlite3_bind_null(stmt, 6);
+    }
+    
+    sqlite3_bind_int(stmt, 7, trans.GetDayOfMonth());
+    sqlite3_bind_int(stmt, 8, trans.IsActive() ? 1 : 0);
+
+    bool success = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return success;
+}
+
+bool Database::UpdateRecurringTransaction(const RecurringTransaction& trans) {
+    const char* sql = R"(
+        UPDATE recurring_transactions 
+        SET libelle = ?, somme = ?, type = ?, recurrence_type = ?,
+            start_date = ?, end_date = ?, last_executed = ?, 
+            day_of_month = ?, active = ?
+        WHERE id = ?;
+    )";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(mDb, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, trans.GetLibelle().c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(stmt, 2, trans.GetSomme());
+    sqlite3_bind_text(stmt, 3, trans.GetType().c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 4, static_cast<int>(trans.GetRecurrence()));
+    sqlite3_bind_text(stmt, 5, trans.GetStartDate().FormatISODate().mb_str(), -1, SQLITE_TRANSIENT);
+    
+    if (trans.GetEndDate().IsValid()) {
+        sqlite3_bind_text(stmt, 6, trans.GetEndDate().FormatISODate().mb_str(), -1, SQLITE_TRANSIENT);
+    } else {
+        sqlite3_bind_null(stmt, 6);
+    }
+    
+    if (trans.GetLastExecuted().IsValid()) {
+        sqlite3_bind_text(stmt, 7, trans.GetLastExecuted().FormatISODate().mb_str(), -1, SQLITE_TRANSIENT);
+    } else {
+        sqlite3_bind_null(stmt, 7);
+    }
+    
+    sqlite3_bind_int(stmt, 8, trans.GetDayOfMonth());
+    sqlite3_bind_int(stmt, 9, trans.IsActive() ? 1 : 0);
+    sqlite3_bind_int(stmt, 10, trans.GetId());
+
+    bool success = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return success;
+}
+
+bool Database::DeleteRecurringTransaction(int id) {
+    const char* sql = "DELETE FROM recurring_transactions WHERE id = ?;";
+    
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(mDb, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+
+    sqlite3_bind_int(stmt, 1, id);
+    bool success = sqlite3_step(stmt) == SQLITE_DONE;
+    sqlite3_finalize(stmt);
+    return success;
+}
+
+std::vector<RecurringTransaction> Database::GetAllRecurringTransactions() {
+    std::vector<RecurringTransaction> transactions;
+    const char* sql = "SELECT * FROM recurring_transactions ORDER BY start_date DESC;";
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(mDb, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return transactions;
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        int id = sqlite3_column_int(stmt, 0);
+        std::string libelle = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        double somme = sqlite3_column_double(stmt, 2);
+        std::string type = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+        auto recurrence = static_cast<RecurrenceType>(sqlite3_column_int(stmt, 4));
+        
+        wxDateTime startDate;
+        startDate.ParseISODate(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5)));
+        
+        wxDateTime endDate;
+        if (sqlite3_column_type(stmt, 6) != SQLITE_NULL) {
+            endDate.ParseISODate(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 6)));
+        }
+        
+        int dayOfMonth = sqlite3_column_int(stmt, 8);
+        bool active = sqlite3_column_int(stmt, 9) != 0;
+        
+        RecurringTransaction trans(id, libelle, somme, type, recurrence, 
+                                  startDate, endDate, dayOfMonth, active);
+        
+        if (sqlite3_column_type(stmt, 7) != SQLITE_NULL) {
+            wxDateTime lastExecuted;
+            lastExecuted.ParseISODate(reinterpret_cast<const char*>(sqlite3_column_text(stmt, 7)));
+            trans.SetLastExecuted(lastExecuted);
+        }
+        
+        transactions.push_back(trans);
+    }
+
+    sqlite3_finalize(stmt);
+    return transactions;
+}
+
+int Database::ExecutePendingRecurringTransactions() {
+    auto recurringTrans = GetAllRecurringTransactions();
+    int count = 0;
+    
+    for (auto& recurring : recurringTrans) {
+        if (recurring.ShouldExecuteToday()) {
+            // Créer une transaction normale
+            Transaction trans;
+            trans.SetDate(wxDateTime::Today());
+            trans.SetLibelle(recurring.GetLibelle());
+            trans.SetSomme(recurring.GetSomme());
+            trans.SetType(recurring.GetType());
+            trans.SetPointee(false);
+            
+            if (AddTransaction(trans)) {
+                // Mettre à jour la date de dernière exécution
+                recurring.SetLastExecuted(wxDateTime::Today());
+                UpdateRecurringTransaction(recurring);
+                count++;
+            }
+        }
+    }
+    
+    return count;
 }
 
 bool Database::ImportTransactionsFromCSV(const std::vector<std::vector<std::string>>& csvData,
