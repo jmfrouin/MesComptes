@@ -24,6 +24,8 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(wxID_ABOUT, MainFrame::OnAbout)
     EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
     EVT_MENU(ID_RAPPROCHEMENT, MainFrame::OnRapprochement)
+    EVT_MENU(ID_HIDE_POINTEES, MainFrame::OnToggleHidePointees)
+    EVT_UPDATE_UI(ID_HIDE_POINTEES, MainFrame::OnUpdateToggleHidePointees)
     EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
     EVT_TEXT(ID_SEARCH_BOX, MainFrame::OnSearchChanged)
     EVT_SEARCHCTRL_CANCEL_BTN(ID_SEARCH_BOX, MainFrame::OnSearchChanged)
@@ -37,7 +39,7 @@ wxEND_EVENT_TABLE()
 MainFrame::MainFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(900, 600)),
         mSommeEnLigne(0.0), mSortColumn(-1), mSortAscending(true), mSearchText(""),
-        mRapprochementMode(false) {
+        mRapprochementMode(false), mHidePointees(false) {
 
     mDatabase = std::make_unique<Database>("mescomptes.db");
     if (!mDatabase->Open()) {
@@ -79,6 +81,12 @@ void MainFrame::CreateMenuBar() {
     menuFile->AppendSeparator();
     menuFile->Append(wxID_EXIT, "&Quitter\tCtrl-Q", "Quitter l'application");
     menuBar->Append(menuFile, "&Fichier");
+
+    // Menu Affichage
+    wxMenu* menuView = new wxMenu;
+    menuView->AppendCheckItem(ID_HIDE_POINTEES, "&Masquer les transactions pointées\tCtrl-H",
+                              "Masquer ou afficher les transactions pointées");
+    menuBar->Append(menuView, "&Affichage");
 
     // Menu Opérations
     wxMenu* menuOperations = new wxMenu;
@@ -808,6 +816,9 @@ void MainFrame::EnterRapprochementMode() {
     // Activer le mode rapprochement
     mRapprochementMode = true;
 
+    // Désactiver l'option "Masquer pointées" pendant le rapprochement
+    GetMenuBar()->Enable(ID_HIDE_POINTEES, false);
+
     // Modifier le titre de la fenêtre
     SetTitle("Mes Comptes - Mode Rapprochement");
 
@@ -826,6 +837,9 @@ void MainFrame::EnterRapprochementMode() {
 
 void MainFrame::ExitRapprochementMode() {
     mRapprochementMode = false;
+
+    // Réactiver l'option "Masquer pointées"
+    GetMenuBar()->Enable(ID_HIDE_POINTEES, true);
 
     // Restaurer le titre de la fenêtre
     SetTitle("Mes Comptes");
@@ -867,12 +881,27 @@ void MainFrame::OnRapprochementItemChecked(wxListEvent& event) {
     }
 }
 
+void MainFrame::OnToggleHidePointees(wxCommandEvent& event) {
+    mHidePointees = event.IsChecked();
+    
+    // Recharger les transactions avec le nouveau filtre
+    LoadTransactions();
+    
+    // Afficher un message informatif
+    if (mHidePointees) {
+        SetStatusText("Transactions pointées masquées");
+    } else {
+        SetStatusText("Toutes les transactions affichées");
+    }
+}
+
 void MainFrame::FilterTransactions() {
     mCachedTransactions.clear();
 
     if (mSearchText.IsEmpty()) {
-        // En mode rapprochement, filtrer uniquement les transactions non pointées
-        if (mRapprochementMode) {
+        // En mode rapprochement OU si l'option "masquer pointées" est active, 
+        // filtrer uniquement les transactions non pointées
+        if (mRapprochementMode || mHidePointees) {
             for (const auto& trans : mAllTransactions) {
                 if (!trans.IsPointee()) {
                     mCachedTransactions.push_back(trans);
@@ -887,8 +916,9 @@ void MainFrame::FilterTransactions() {
         wxString searchLower = mSearchText.Lower();
 
         for (const auto& trans : mAllTransactions) {
-            // En mode rapprochement, ignorer les transactions pointées
-            if (mRapprochementMode && trans.IsPointee()) {
+            // En mode rapprochement OU si l'option "masquer pointées" est active,
+            // ignorer les transactions pointées
+            if ((mRapprochementMode || mHidePointees) && trans.IsPointee()) {
                 continue;
             }
 
@@ -915,4 +945,8 @@ void MainFrame::FilterTransactions() {
             }
         }
     }
+}
+
+void MainFrame::OnUpdateToggleHidePointees(wxUpdateUIEvent& event) {
+    event.Check(mHidePointees);
 }

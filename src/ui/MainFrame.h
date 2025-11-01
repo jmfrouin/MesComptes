@@ -38,7 +38,8 @@ private:
     void OnSearchChanged(wxCommandEvent& event);
     void OnRapprochement(wxCommandEvent& event);
     void OnRapprochementItemChecked(wxListEvent& event);
-
+    void OnToggleHidePointees(wxCommandEvent& event);
+    void OnUpdateToggleHidePointees(wxUpdateUIEvent& event);
 
     // Helper methods
     void ShowTransactionDialog(Transaction* existingTransaction = nullptr);
@@ -70,6 +71,9 @@ private:
     // Rapprochement mode
     bool mRapprochementMode;
 
+    // Display options
+    bool mHidePointees;
+
     wxDECLARE_EVENT_TABLE();
 };
 
@@ -84,7 +88,8 @@ enum {
     ID_SOMME_EN_LIGNE,
     ID_TRANSACTION_LIST,
     ID_SEARCH_BOX,
-    ID_RAPPROCHEMENT
+    ID_RAPPROCHEMENT,
+    ID_HIDE_POINTEES
 };
 
 #endif // MAINFRAME_H
