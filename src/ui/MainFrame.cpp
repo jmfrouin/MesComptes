@@ -38,6 +38,12 @@ MainFrame::MainFrame(const wxString& title)
                      "Erreur", wxOK | wxICON_ERROR);
     }
 
+    // Définir l'icône de l'application
+    wxIcon icon("icon.png", wxBITMAP_TYPE_PNG);
+    if (icon.IsOk()) {
+        SetIcon(icon);
+    }
+
     CreateMenuBar();
     CreateControls();
     LoadTransactions();
