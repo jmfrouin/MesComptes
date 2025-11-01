@@ -7,6 +7,7 @@
 
 #include <wx/wx.h>
 #include <wx/listctrl.h>
+#include <wx/srchctrl.h>
 #include <core/Database.h>
 #include <memory>
 
@@ -34,12 +35,14 @@ private:
     void OnTransactionDoubleClick(wxListEvent& event);
     void OnTransactionRightClick(wxListEvent& event);
     void OnColumnClick(wxListEvent& event);
+    void OnSearchChanged(wxCommandEvent& event);
 
 
     // Helper methods
     void ShowTransactionDialog(Transaction* existingTransaction = nullptr);
     void SortTransactions(int column);
     void UpdateColumnHeaders();
+    void FilterTransactions();
 
     // Widgets
     wxListCtrl* mTransactionList;
@@ -47,6 +50,7 @@ private:
     wxTextCtrl* mPointeeText;
     wxTextCtrl* mSommeEnLigneText;
     wxTextCtrl* mDiffText;
+    wxSearchCtrl* mSearchBox;
 
     // Database
     std::unique_ptr<Database> mDatabase;
@@ -56,6 +60,8 @@ private:
     int mSortColumn;
     bool mSortAscending;
     std::vector<Transaction> mCachedTransactions;
+    std::vector<Transaction> mAllTransactions;
+    wxString mSearchText;
 
     wxDECLARE_EVENT_TABLE();
 };
@@ -69,7 +75,8 @@ enum {
     ID_DELETE_TRANSACTION,
     ID_TOGGLE_POINTEE,
     ID_SOMME_EN_LIGNE,
-    ID_TRANSACTION_LIST
+    ID_TRANSACTION_LIST,
+    ID_SEARCH_BOX
 };
 
 #endif // MAINFRAME_H

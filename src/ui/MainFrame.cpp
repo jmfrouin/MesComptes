@@ -9,6 +9,7 @@
 #include <wx/stattext.h>
 #include <wx/datectrl.h>
 #include <wx/progdlg.h>
+#include <wx/srchctrl.h>
 #include <fstream>
 #include <sstream>
 
@@ -23,6 +24,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(wxID_ABOUT, MainFrame::OnAbout)
     EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
     EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
+    EVT_TEXT(ID_SEARCH_BOX, MainFrame::OnSearchChanged)
     EVT_LIST_ITEM_ACTIVATED(ID_TRANSACTION_LIST, MainFrame::OnTransactionDoubleClick)
     EVT_LIST_ITEM_RIGHT_CLICK(ID_TRANSACTION_LIST, MainFrame::OnTransactionRightClick)
     EVT_LIST_COL_CLICK(ID_TRANSACTION_LIST, MainFrame::OnColumnClick)
@@ -30,7 +32,7 @@ wxEND_EVENT_TABLE()
 
 MainFrame::MainFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(900, 600)),
-        mSommeEnLigne(0.0), mSortColumn(-1), mSortAscending(true) {
+        mSommeEnLigne(0.0), mSortColumn(-1), mSortAscending(true), mSearchText("") {
 
     mDatabase = std::make_unique<Database>("mescomptes.db");
     if (!mDatabase->Open()) {
@@ -108,6 +110,19 @@ void MainFrame::CreateControls() {
     wxPanel* panel = new wxPanel(this);
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
 
+    // Barre de recherche
+    wxBoxSizer* searchSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxStaticText* searchLabel = new wxStaticText(panel, wxID_ANY, "Recherche:");
+    searchSizer->Add(searchLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
+    
+    mSearchBox = new wxSearchCtrl(panel, ID_SEARCH_BOX, wxEmptyString, 
+                                   wxDefaultPosition, wxSize(300, -1));
+    mSearchBox->ShowCancelButton(true);
+    mSearchBox->SetDescriptiveText("Rechercher dans libellé ou montant...");
+    searchSizer->Add(mSearchBox, 0, wxALIGN_CENTER_VERTICAL);
+    
+    mainSizer->Add(searchSizer, 0, wxALL, 5);
+
     // Liste des transactions
     mTransactionList = new wxListCtrl(panel, ID_TRANSACTION_LIST, wxDefaultPosition,
                                        wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
@@ -152,7 +167,10 @@ void MainFrame::LoadTransactions() {
     mTransactionList->DeleteAllItems();
 
     Settings& settings = Settings::GetInstance();
-    mCachedTransactions = mDatabase->GetAllTransactions();
+    mAllTransactions = mDatabase->GetAllTransactions();
+    
+    // Appliquer le filtre de recherche
+    FilterTransactions();
 
     // Appliquer le tri si une colonne est sélectionnée
     if (mSortColumn >= 0) {
@@ -714,5 +732,46 @@ void MainFrame::UpdateColumnHeaders() {
         }
 
         mTransactionList->SetColumn(i, col);
+    }
+}
+
+void MainFrame::OnSearchChanged(wxCommandEvent& event) {
+    mSearchText = mSearchBox->GetValue();
+    LoadTransactions();
+}
+
+void MainFrame::FilterTransactions() {
+    mCachedTransactions.clear();
+    
+    if (mSearchText.IsEmpty()) {
+        // Pas de filtre, afficher toutes les transactions
+        mCachedTransactions = mAllTransactions;
+    } else {
+        // Filtrer par libellé ou montant
+        wxString searchLower = mSearchText.Lower();
+        
+        for (const auto& trans : mAllTransactions) {
+            // Recherche dans le libellé
+            wxString libelle = wxString(trans.GetLibelle()).Lower();
+            if (libelle.Contains(searchLower)) {
+                mCachedTransactions.push_back(trans);
+                continue;
+            }
+            
+            // Recherche dans le montant
+            Settings& settings = Settings::GetInstance();
+            wxString sommeStr = settings.FormatMoney(trans.GetSomme());
+            if (sommeStr.Contains(searchLower)) {
+                mCachedTransactions.push_back(trans);
+                continue;
+            }
+            
+            // Recherche avec le signe + ou -
+            bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
+            wxString sommeWithSign = (isDepense ? "-" : "+") + sommeStr;
+            if (sommeWithSign.Contains(searchLower)) {
+                mCachedTransactions.push_back(trans);
+            }
+        }
     }
 }
