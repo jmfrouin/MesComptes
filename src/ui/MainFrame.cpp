@@ -23,17 +23,21 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(ID_IMPORT_CSV, MainFrame::OnImportCSV)
     EVT_MENU(wxID_ABOUT, MainFrame::OnAbout)
     EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
+    EVT_MENU(ID_RAPPROCHEMENT, MainFrame::OnRapprochement)
     EVT_TEXT(ID_SOMME_EN_LIGNE, MainFrame::OnSommeEnLigneChanged)
     EVT_TEXT(ID_SEARCH_BOX, MainFrame::OnSearchChanged)
     EVT_SEARCHCTRL_CANCEL_BTN(ID_SEARCH_BOX, MainFrame::OnSearchChanged)
     EVT_LIST_ITEM_ACTIVATED(ID_TRANSACTION_LIST, MainFrame::OnTransactionDoubleClick)
     EVT_LIST_ITEM_RIGHT_CLICK(ID_TRANSACTION_LIST, MainFrame::OnTransactionRightClick)
     EVT_LIST_COL_CLICK(ID_TRANSACTION_LIST, MainFrame::OnColumnClick)
+    EVT_LIST_ITEM_CHECKED(ID_TRANSACTION_LIST, MainFrame::OnRapprochementItemChecked)
+    EVT_LIST_ITEM_UNCHECKED(ID_TRANSACTION_LIST, MainFrame::OnRapprochementItemChecked)
 wxEND_EVENT_TABLE()
 
 MainFrame::MainFrame(const wxString& title)
     : wxFrame(nullptr, wxID_ANY, title, wxDefaultPosition, wxSize(900, 600)),
-        mSommeEnLigne(0.0), mSortColumn(-1), mSortAscending(true), mSearchText("") {
+        mSommeEnLigne(0.0), mSortColumn(-1), mSortAscending(true), mSearchText(""),
+        mRapprochementMode(false) {
 
     mDatabase = std::make_unique<Database>("mescomptes.db");
     if (!mDatabase->Open()) {
@@ -75,6 +79,12 @@ void MainFrame::CreateMenuBar() {
     menuFile->AppendSeparator();
     menuFile->Append(wxID_EXIT, "&Quitter\tCtrl-Q", "Quitter l'application");
     menuBar->Append(menuFile, "&Fichier");
+
+    // Menu Opérations
+    wxMenu* menuOperations = new wxMenu;
+    menuOperations->Append(ID_RAPPROCHEMENT, "&Rapprochement bancaire\tCtrl-R",
+                          "Effectuer un rapprochement bancaire");
+    menuBar->Append(menuOperations, "&Opérations");
 
     // Menu Informations
     wxMenu* menuInfo = new wxMenu;
@@ -185,6 +195,17 @@ void MainFrame::LoadTransactions() {
     // Appliquer le tri si une colonne est sélectionnée
     if (mSortColumn >= 0) {
         SortTransactions(mSortColumn);
+    }
+    
+    long style = mTransactionList->GetWindowStyle();
+    if (mRapprochementMode) {
+        if (!(style & wxLC_REPORT)) {
+            style |= wxLC_REPORT;
+        }
+        mTransactionList->SetWindowStyle(style);
+        mTransactionList->EnableCheckBoxes(true);
+    } else {
+        mTransactionList->EnableCheckBoxes(false);
     }
 
     for (size_t i = 0; i < mCachedTransactions.size(); ++i) {
@@ -750,24 +771,134 @@ void MainFrame::OnSearchChanged(wxCommandEvent& event) {
     LoadTransactions();
 }
 
+void MainFrame::OnRapprochement(wxCommandEvent& event) {
+    if (mRapprochementMode) {
+        // Sortir du mode rapprochement
+        if (wxMessageBox("Voulez-vous quitter le mode rapprochement?",
+                        "Confirmation", wxYES_NO | wxICON_QUESTION) == wxYES) {
+            ExitRapprochementMode();
+        }
+    } else {
+        // Entrer en mode rapprochement
+        EnterRapprochementMode();
+    }
+}
+
+void MainFrame::EnterRapprochementMode() {
+    // Dialogue pour saisir le solde en ligne
+    wxTextEntryDialog dialog(this,
+                            "Entrez le solde indiqué sur votre relevé bancaire:",
+                            "Rapprochement bancaire",
+                            wxString::Format("%.2f", mSommeEnLigne));
+
+    if (dialog.ShowModal() != wxID_OK) {
+        return;
+    }
+
+    double solde;
+    if (!dialog.GetValue().ToDouble(&solde)) {
+        wxMessageBox("Valeur invalide", "Erreur", wxOK | wxICON_ERROR);
+        return;
+    }
+
+    // Mettre à jour le solde en ligne
+    mSommeEnLigne = solde;
+    mSommeEnLigneText->SetValue(wxString::Format("%.2f", mSommeEnLigne));
+
+    // Activer le mode rapprochement
+    mRapprochementMode = true;
+
+    // Modifier le titre de la fenêtre
+    SetTitle("Mes Comptes - Mode Rapprochement");
+
+    // Changer le label du menu
+    GetMenuBar()->SetLabel(ID_RAPPROCHEMENT, "&Quitter le rapprochement\tCtrl-R");
+
+    // Recharger les transactions (affichera uniquement les non pointées avec checkboxes)
+    LoadTransactions();
+    UpdateSummary();
+
+    wxMessageBox("Mode rapprochement activé.\n\n"
+                "Cochez les transactions qui apparaissent sur votre relevé bancaire.\n"
+                "Seules les transactions non pointées sont affichées.",
+                "Information", wxOK | wxICON_INFORMATION);
+}
+
+void MainFrame::ExitRapprochementMode() {
+    mRapprochementMode = false;
+
+    // Restaurer le titre de la fenêtre
+    SetTitle("Mes Comptes");
+
+    // Restaurer le label du menu
+    GetMenuBar()->SetLabel(ID_RAPPROCHEMENT, "&Rapprochement bancaire\tCtrl-R");
+
+    // Recharger les transactions (affichera toutes les transactions sans checkboxes)
+    LoadTransactions();
+    UpdateSummary();
+}
+
+void MainFrame::OnRapprochementItemChecked(wxListEvent& event) {
+    if (!mRapprochementMode) {
+        return;
+    }
+
+    long index = event.GetIndex();
+    int transactionId = mTransactionList->GetItemData(index);
+    bool isChecked = mTransactionList->IsItemChecked(index);
+
+    // Trouver la transaction et mettre à jour son état
+    auto transactions = mDatabase->GetAllTransactions();
+    for (auto& trans : transactions) {
+        if (trans.GetId() == transactionId) {
+            trans.SetPointee(isChecked);
+
+            // Si on pointe la transaction, enregistrer la date actuelle
+            if (isChecked) {
+                trans.SetDatePointee(wxDateTime::Now());
+            } else {
+                trans.SetDatePointee(wxDateTime());
+            }
+
+            mDatabase->UpdateTransaction(trans);
+            UpdateSummary();
+            break;
+        }
+    }
+}
+
 void MainFrame::FilterTransactions() {
     mCachedTransactions.clear();
-    
+
     if (mSearchText.IsEmpty()) {
-        // Pas de filtre, afficher toutes les transactions
-        mCachedTransactions = mAllTransactions;
+        // En mode rapprochement, filtrer uniquement les transactions non pointées
+        if (mRapprochementMode) {
+            for (const auto& trans : mAllTransactions) {
+                if (!trans.IsPointee()) {
+                    mCachedTransactions.push_back(trans);
+                }
+            }
+        } else {
+            // Pas de filtre, afficher toutes les transactions
+            mCachedTransactions = mAllTransactions;
+        }
     } else {
         // Filtrer par libellé ou montant
         wxString searchLower = mSearchText.Lower();
-        
+
         for (const auto& trans : mAllTransactions) {
+            // En mode rapprochement, ignorer les transactions pointées
+            if (mRapprochementMode && trans.IsPointee()) {
+                continue;
+            }
+
             // Recherche dans le libellé
             wxString libelle = wxString(trans.GetLibelle()).Lower();
             if (libelle.Contains(searchLower)) {
                 mCachedTransactions.push_back(trans);
                 continue;
             }
-            
+
             // Recherche dans le montant
             Settings& settings = Settings::GetInstance();
             wxString sommeStr = settings.FormatMoney(trans.GetSomme());
@@ -775,7 +906,7 @@ void MainFrame::FilterTransactions() {
                 mCachedTransactions.push_back(trans);
                 continue;
             }
-            
+
             // Recherche avec le signe + ou -
             bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
             wxString sommeWithSign = (isDepense ? "-" : "+") + sommeStr;

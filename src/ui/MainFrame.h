@@ -36,6 +36,8 @@ private:
     void OnTransactionRightClick(wxListEvent& event);
     void OnColumnClick(wxListEvent& event);
     void OnSearchChanged(wxCommandEvent& event);
+    void OnRapprochement(wxCommandEvent& event);
+    void OnRapprochementItemChecked(wxListEvent& event);
 
 
     // Helper methods
@@ -43,6 +45,8 @@ private:
     void SortTransactions(int column);
     void UpdateColumnHeaders();
     void FilterTransactions();
+    void EnterRapprochementMode();
+    void ExitRapprochementMode();
 
     // Widgets
     wxListCtrl* mTransactionList;
@@ -63,6 +67,9 @@ private:
     std::vector<Transaction> mAllTransactions;
     wxString mSearchText;
 
+    // Rapprochement mode
+    bool mRapprochementMode;
+
     wxDECLARE_EVENT_TABLE();
 };
 
@@ -76,7 +83,8 @@ enum {
     ID_TOGGLE_POINTEE,
     ID_SOMME_EN_LIGNE,
     ID_TRANSACTION_LIST,
-    ID_SEARCH_BOX
+    ID_SEARCH_BOX,
+    ID_RAPPROCHEMENT
 };
 
 #endif // MAINFRAME_H
