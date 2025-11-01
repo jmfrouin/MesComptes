@@ -39,7 +39,7 @@ MainFrame::MainFrame(const wxString& title)
     }
 
     // Définir l'icône de l'application
-    wxIcon icon("icon.png", wxBITMAP_TYPE_PNG);
+    wxIcon icon("res/icon.png", wxBITMAP_TYPE_PNG);
     if (icon.IsOk()) {
         SetIcon(icon);
     }
