@@ -348,3 +348,70 @@ msgstr "Supprimer"
 # About
 msgid "Built with:\n• C++20\n• wxWidgets %s\n• SQLite3\n\n© 2025 Development Team - JM Frouin"
 msgstr "Compilé avec:\n• C++20\n• wxWidgets %s\n• SQLite3\n\n© 2025 Development Team - JM Frouin"
+
+# Preferences Dialog
+msgid "Preferences"
+msgstr "Préférences"
+
+msgid "Transaction Types"
+msgstr "Types de transactions"
+
+msgid "Display"
+msgstr "Affichage"
+
+msgid "Name"
+msgstr "Nom"
+
+msgid "Category"
+msgstr "Catégorie"
+
+msgid "Add"
+msgstr "Ajouter"
+
+msgid "Date Format:"
+msgstr "Format de date:"
+
+msgid "Decimal Separator:"
+msgstr "Séparateur décimal:"
+
+msgid "Point (.)"
+msgstr "Point (.)"
+
+msgid "Add Transaction Type"
+msgstr "Ajouter un type de transaction"
+
+msgid "Edit Transaction Type"
+msgstr "Modifier un type de transaction"
+
+msgid "Type name:"
+msgstr "Nom du type:"
+
+msgid "Category:"
+msgstr "Catégorie:"
+
+msgid "Please enter a name"
+msgstr "Veuillez entrer un nom"
+
+msgid "Are you sure you want to delete this type?"
+msgstr "Êtes-vous sûr de vouloir supprimer ce type?"
+
+msgid "This type is used by existing transactions and cannot be deleted."
+msgstr "Ce type est utilisé par des transactions existantes et ne peut pas être supprimé."
+
+msgid "Warning"
+msgstr "Attention"
+
+msgid "Language:"
+msgstr "Langue:"
+
+msgid "French"
+msgstr "Français"
+
+msgid "English"
+msgstr "Anglais"
+
+msgid "Restart required"
+msgstr "Redémarrage requis"
+
+msgid "Please restart the application for the language change to take effect."
+msgstr "Veuillez redémarrer l'application pour que le changement de langue prenne effet."

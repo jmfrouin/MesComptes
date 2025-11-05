@@ -25,12 +25,14 @@ private:
     void OnItemActivated(wxListEvent& event);
     void OnDateFormatChanged(wxCommandEvent& event);
     void OnDecimalSeparatorChanged(wxCommandEvent& event);
+    void OnLanguageChanged(wxCommandEvent& event);
 
-    wxListCtrl* mTypeList;
+    wxListCtrl* mTypesList;
     wxTextCtrl* mNewTypeText;
     wxRadioBox* mTypeRadio;
     wxChoice* mDateFormatChoice;
     wxChoice* mDecimalSeparatorChoice;
+    wxChoice* mLanguageChoice;
     wxStaticText* mDateExample;
     wxStaticText* mMoneyExample;
     Database* mDatabase;
@@ -42,9 +44,10 @@ enum {
     ID_ADD_TYPE = wxID_HIGHEST + 100,
     ID_DELETE_TYPE,
     ID_EDIT_TYPE,
-    ID_TYPE_LIST,
+    ID_TYPES_LIST,
     ID_DATE_FORMAT,
-    ID_DECIMAL_SEPARATOR
+    ID_DECIMAL_SEPARATOR,
+    ID_LANGUAGE
 };
 
 #endif // PREFERENCESDIALOG_H

@@ -710,3 +710,24 @@ bool Database::ImportTransactionsFromCSV(const std::vector<std::vector<std::stri
 
     return errorCount == 0;
 }
+
+bool Database::IsTypeUsed(const std::string& typeName) const {
+    // Example implementation - adjust based on your database structure
+    const char* sql = "SELECT COUNT(*) FROM transactions WHERE type_name = ?";
+    sqlite3_stmt* stmt;
+
+    if (sqlite3_prepare_v2(mDb, sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        return false;
+    }
+
+    sqlite3_bind_text(stmt, 1, typeName.c_str(), -1, SQLITE_TRANSIENT);
+
+    bool isUsed = false;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        int count = sqlite3_column_int(stmt, 0);
+        isUsed = (count > 0);
+    }
+
+    sqlite3_finalize(stmt);
+    return isUsed;
+}

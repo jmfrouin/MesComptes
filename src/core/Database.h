@@ -65,6 +65,8 @@ public:
     // Exécute les transactions récurrentes dues
     int ExecutePendingRecurringTransactions();
 
+    bool IsTypeUsed(const std::string& typeName) const;
+
 private:
     bool CreateTables();
     bool InitializeDefaultTypes();
