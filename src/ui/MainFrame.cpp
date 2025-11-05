@@ -10,6 +10,8 @@
 #include <wx/datectrl.h>
 #include <wx/progdlg.h>
 #include <wx/srchctrl.h>
+#include <wx/wfstream.h>
+#include <wx/zipstrm.h>
 #include <fstream>
 #include <sstream>
 
@@ -22,6 +24,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(ID_PREFERENCES, MainFrame::OnPreferences)
     EVT_MENU(ID_INFO, MainFrame::OnInfo)
     EVT_MENU(ID_IMPORT_CSV, MainFrame::OnImportCSV)
+    EVT_MENU(ID_BACKUP, MainFrame::OnBackup)
     EVT_MENU(wxID_ABOUT, MainFrame::OnAbout)
     EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
     EVT_MENU(ID_RAPPROCHEMENT, MainFrame::OnRapprochement)
@@ -81,6 +84,9 @@ void MainFrame::CreateMenuBar() {
     menuFile->AppendSeparator();
     menuFile->Append(ID_IMPORT_CSV, "&Importer depuis CSV\tCtrl-I",
                      "Importer des transactions depuis un fichier CSV");
+    menuFile->AppendSeparator();
+    menuFile->Append(ID_BACKUP, "&Sauvegarder le compte\tCtrl-S",
+                     "Créer une sauvegarde du compte au format texte compressé");
     menuFile->AppendSeparator();
     menuFile->Append(ID_MANAGE_RECURRING, "Gérer les &récurrences\tCtrl-T",
                      "Gérer les transactions récurrentes");
@@ -983,4 +989,147 @@ void MainFrame::FilterTransactions() {
 
 void MainFrame::OnUpdateToggleHidePointees(wxUpdateUIEvent& event) {
     event.Check(mHidePointees);
+}
+
+void MainFrame::OnBackup(wxCommandEvent& event) {
+    // Demander à l'utilisateur où sauvegarder le fichier
+    wxFileDialog saveFileDialog(this, "Sauvegarder le compte", "",
+                                "sauvegarde_compte.zip",
+                                "Fichiers ZIP (*.zip)|*.zip",
+                                wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+    if (saveFileDialog.ShowModal() == wxID_CANCEL) {
+        return;
+    }
+
+    wxString zipPath = saveFileDialog.GetPath();
+    wxString txtPath = zipPath;
+    txtPath.Replace(".zip", ".txt");
+
+    Settings& settings = Settings::GetInstance();
+
+    try {
+        // Créer le fichier texte de sauvegarde
+        std::ofstream textFile(txtPath.ToStdString());
+        if (!textFile.is_open()) {
+            wxMessageBox("Impossible de créer le fichier de sauvegarde",
+                        "Erreur", wxOK | wxICON_ERROR);
+            return;
+        }
+
+        // Écrire l'en-tête
+        textFile << "=================================================\n";
+        textFile << "        SAUVEGARDE DU COMPTE - MesComptes\n";
+        textFile << "=================================================\n";
+        textFile << "Date de sauvegarde: " << wxDateTime::Now().Format("%d/%m/%Y %H:%M:%S").ToStdString() << "\n";
+        textFile << "Version: " << MESCOMPTES::VERSION_STRING << "\n";
+        textFile << "=================================================\n\n";
+
+        // Récupérer toutes les transactions
+        auto allTransactions = mDatabase->GetAllTransactions();
+
+        // Trier par date
+        std::sort(allTransactions.begin(), allTransactions.end(),
+            [](const Transaction& a, const Transaction& b) {
+                return a.GetDate() < b.GetDate();
+            });
+
+        // Écrire les statistiques
+        textFile << "STATISTIQUES\n";
+        textFile << "------------\n";
+        textFile << "Nombre total de transactions: " << allTransactions.size() << "\n";
+        textFile << "Restant: " << settings.FormatMoney(mDatabase->GetTotalRestant()).ToStdString() << " €\n";
+        textFile << "Somme pointée: " << settings.FormatMoney(mDatabase->GetTotalPointee()).ToStdString() << " €\n";
+        textFile << "\n\n";
+
+        // Écrire les types de transactions
+        textFile << "TYPES DE TRANSACTIONS\n";
+        textFile << "---------------------\n";
+        auto types = mDatabase->GetAllTypes();
+        for (const auto& type : types) {
+            textFile << "- " << type.mNom << " ("
+                    << (type.mIsDepense ? "Dépense" : "Recette") << ")\n";
+        }
+        textFile << "\n\n";
+
+        // Écrire toutes les transactions
+        textFile << "LISTE DES TRANSACTIONS\n";
+        textFile << "======================\n\n";
+
+        for (const auto& trans : allTransactions) {
+            textFile << "Transaction #" << trans.GetId() << "\n";
+            textFile << "  Date         : " << settings.FormatDate(trans.GetDate()).ToStdString() << "\n";
+            textFile << "  Libellé      : " << trans.GetLibelle() << "\n";
+
+            bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
+            textFile << "  Somme        : " << (isDepense ? "-" : "+")
+                    << settings.FormatMoney(trans.GetSomme()).ToStdString() << " €\n";
+
+            textFile << "  Type         : " << trans.GetType() << "\n";
+            textFile << "  Pointée      : " << (trans.IsPointee() ? "Oui" : "Non") << "\n";
+
+            if (trans.IsPointee() && trans.GetDatePointee().IsValid()) {
+                textFile << "  Date pointée : " << settings.FormatDate(trans.GetDatePointee()).ToStdString() << "\n";
+            }
+
+            textFile << "\n";
+        }
+
+        textFile << "=================================================\n";
+        textFile << "           FIN DE LA SAUVEGARDE\n";
+        textFile << "=================================================\n";
+
+        textFile.close();
+
+        // Compresser le fichier texte dans un ZIP
+        wxFileOutputStream out(zipPath);
+        if (!out.IsOk()) {
+            wxMessageBox("Impossible de créer le fichier ZIP",
+                        "Erreur", wxOK | wxICON_ERROR);
+            wxRemoveFile(txtPath);
+            return;
+        }
+
+        wxZipOutputStream zip(out);
+        if (!zip.IsOk()) {
+            wxMessageBox("Erreur lors de la création de l'archive ZIP",
+                        "Erreur", wxOK | wxICON_ERROR);
+            wxRemoveFile(txtPath);
+            return;
+        }
+
+        // Ajouter le fichier texte au ZIP
+        wxFileInputStream in(txtPath);
+        if (!in.IsOk()) {
+            wxMessageBox("Impossible de lire le fichier texte",
+                        "Erreur", wxOK | wxICON_ERROR);
+            wxRemoveFile(txtPath);
+            return;
+        }
+
+        wxString filename = wxFileName(txtPath).GetFullName();
+        zip.PutNextEntry(filename);
+        zip.Write(in);
+
+        zip.CloseEntry();
+        zip.Close();
+        out.Close();
+
+        // Supprimer le fichier texte temporaire
+        wxRemoveFile(txtPath);
+
+        wxMessageBox(wxString::Format("Sauvegarde créée avec succès!\n\n"
+                                      "Fichier: %s\n"
+                                      "Transactions: %zu",
+                                      zipPath, allTransactions.size()),
+                    "Sauvegarde réussie", wxOK | wxICON_INFORMATION);
+
+    } catch (const std::exception& e) {
+        wxMessageBox(wxString::Format("Erreur lors de la sauvegarde: %s", e.what()),
+                    "Erreur", wxOK | wxICON_ERROR);
+        // Nettoyer les fichiers temporaires
+        if (wxFileExists(txtPath)) {
+            wxRemoveFile(txtPath);
+        }
+    }
 }

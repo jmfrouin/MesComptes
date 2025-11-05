@@ -41,6 +41,7 @@ private:
     void OnRapprochementItemChecked(wxListEvent& event);
     void OnToggleHidePointees(wxCommandEvent& event);
     void OnUpdateToggleHidePointees(wxUpdateUIEvent& event);
+    void OnBackup(wxCommandEvent& event);
 
     // Helper methods
     void ShowTransactionDialog(Transaction* existingTransaction = nullptr);
@@ -91,7 +92,8 @@ enum {
     ID_SEARCH_BOX,
     ID_RAPPROCHEMENT,
     ID_HIDE_POINTEES,
-    ID_MANAGE_RECURRING  // NOUVEAU
+    ID_MANAGE_RECURRING,
+    ID_BACKUP
 };
 
 #endif // MAINFRAME_H
