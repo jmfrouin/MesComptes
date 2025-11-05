@@ -18,6 +18,7 @@
 #include "RecurringDialog.h"
 #include "core/version.h"
 #include "core/Settings.h"
+#include "core/LanguageManager.h"
 
 wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(wxID_EXIT, MainFrame::OnQuit)
@@ -44,10 +45,13 @@ MainFrame::MainFrame(const wxString& title)
         mSommeEnLigne(0.0), mSortColumn(-1), mSortAscending(true), mSearchText(""),
         mRapprochementMode(false), mHidePointees(false) {
 
+    // Initialiser le gestionnaire de langues
+    LanguageManager::GetInstance().Initialize(this);
+
     mDatabase = std::make_unique<Database>("mescomptes.db");
     if (!mDatabase->Open()) {
-        wxMessageBox("Erreur lors de l'ouverture de la base de données",
-                     "Erreur", wxOK | wxICON_ERROR);
+        wxMessageBox(_("Error opening database"),
+                     _("Error"), wxOK | wxICON_ERROR);
     }
     
     // Exécuter les transactions récurrentes en attente
@@ -80,52 +84,55 @@ void MainFrame::CreateMenuBar() {
 
     // Menu Fichier
     wxMenu* menuFile = new wxMenu;
-    menuFile->Append(ID_ADD_TRANSACTION, "&Nouvelle transaction\tCtrl-N",
-                     "Ajouter une nouvelle transaction");
+    menuFile->Append(ID_ADD_TRANSACTION, _("&New Transaction\tCtrl-N"),
+                     _("Add a new transaction"));
     menuFile->AppendSeparator();
+    
+    // Sous-menu Import/Export
     wxMenu* menuImportExport = new wxMenu;
-    menuImportExport->Append(ID_IMPORT_CSV, "&Importer depuis CSV\tCtrl-I",
-                            "Importer des transactions depuis un fichier CSV");
-    menuImportExport->Append(ID_EXPORT_CSV, "&Exporter en CSV\tCtrl-E",
-                            "Exporter les transactions en fichier CSV");
-    menuFile->AppendSubMenu(menuImportExport, "&Import/Export",
-                           "Importer ou exporter des données");
+    menuImportExport->Append(ID_IMPORT_CSV, _("&Import from CSV\tCtrl-I"),
+                            _("Import transactions from a CSV file"));
+    menuImportExport->Append(ID_EXPORT_CSV, _("&Export to CSV\tCtrl-E"),
+                            _("Export transactions to a CSV file"));
+    menuFile->AppendSubMenu(menuImportExport, _("&Import/Export"), 
+                           _("Import or export data"));
+    
     menuFile->AppendSeparator();
-    menuFile->Append(ID_BACKUP, "&Sauvegarder le compte\tCtrl-S",
-                     "Créer une sauvegarde du compte au format texte compressé");
+    menuFile->Append(ID_BACKUP, _("&Backup Account\tCtrl-S"),
+                     _("Create a compressed backup of the account"));
     menuFile->AppendSeparator();
-    menuFile->Append(ID_MANAGE_RECURRING, "Gérer les &récurrences\tCtrl-T",
-                     "Gérer les transactions récurrentes");
+    menuFile->Append(ID_MANAGE_RECURRING, _("Manage &Recurring\tCtrl-T"),
+                     _("Manage recurring transactions"));
     menuFile->AppendSeparator();
-    menuFile->Append(ID_PREFERENCES, "&Préférences\tCtrl-P",
-                     "Gérer les types de transactions");
+    menuFile->Append(ID_PREFERENCES, _("&Preferences\tCtrl-P"),
+                     _("Manage transaction types"));
     menuFile->AppendSeparator();
-    menuFile->Append(wxID_EXIT, "&Quitter\tCtrl-Q", "Quitter l'application");
-    menuBar->Append(menuFile, "&Fichier");
+    menuFile->Append(wxID_EXIT, _("&Quit\tCtrl-Q"), _("Quit the application"));
+    menuBar->Append(menuFile, _("&File"));
 
     // Menu Affichage
     wxMenu* menuView = new wxMenu;
-    menuView->AppendCheckItem(ID_HIDE_POINTEES, "&Masquer les transactions pointées\tCtrl-H",
-                              "Masquer ou afficher les transactions pointées");
-    menuBar->Append(menuView, "&Affichage");
+    menuView->AppendCheckItem(ID_HIDE_POINTEES, _("&Hide Checked Transactions\tCtrl-H"),
+                              _("Hide or show checked transactions"));
+    menuBar->Append(menuView, _("&View"));
 
     // Menu Opérations
     wxMenu* menuOperations = new wxMenu;
-    menuOperations->Append(ID_RAPPROCHEMENT, "&Rapprochement bancaire\tCtrl-R",
-                          "Effectuer un rapprochement bancaire");
-    menuBar->Append(menuOperations, "&Opérations");
+    menuOperations->Append(ID_RAPPROCHEMENT, _("&Bank Reconciliation\tCtrl-R"),
+                          _("Perform a bank reconciliation"));
+    menuBar->Append(menuOperations, _("&Operations"));
 
     // Menu Informations
     wxMenu* menuInfo = new wxMenu;
-    menuInfo->Append(ID_INFO, "&Informations\tCtrl-I",
-                     "Afficher les informations de la base");
-    menuBar->Append(menuInfo, "I&nformations");
+    menuInfo->Append(ID_INFO, _("&Database Info\tCtrl-I"),
+                     _("Show database information"));
+    menuBar->Append(menuInfo, _("&Information"));
 
     // Menu Aide
     wxMenu* menuHelp = new wxMenu;
-    menuHelp->Append(wxID_ABOUT, "À &propos\tF1",
-                     "À propos de Mes Comptes");
-    menuBar->Append(menuHelp, "&Aide");
+    menuHelp->Append(wxID_ABOUT, _("&About\tF1"),
+                     _("About Mes Comptes"));
+    menuBar->Append(menuHelp, _("&Help"));
 
     SetMenuBar(menuBar);
 }
@@ -140,10 +147,11 @@ void MainFrame::OnAbout(wxCommandEvent& event) {
         "• SQLite3\n\n"
         "© 2025 Development Team - JM Frouin",
         MESCOMPTES::VERSION_STRING,
-        wxVERSION_STRING
+        _("Built with:\n• C++20\n• wxWidgets %s\n• SQLite3\n\n© 2025 Development Team - JM Frouin")
     );
 
-    wxMessageBox(aboutText, "About MesComptes", wxOK | wxICON_INFORMATION, this);
+    wxMessageBox(wxString::Format(aboutText, wxVERSION_STRING), 
+                 _("About Mes Comptes"), wxOK | wxICON_INFORMATION, this);
 }
 
 void MainFrame::CreateControls() {
@@ -152,13 +160,13 @@ void MainFrame::CreateControls() {
 
     // Barre de recherche
     wxBoxSizer* searchSizer = new wxBoxSizer(wxHORIZONTAL);
-    wxStaticText* searchLabel = new wxStaticText(panel, wxID_ANY, "Recherche:");
+    wxStaticText* searchLabel = new wxStaticText(panel, wxID_ANY, _("Search:"));
     searchSizer->Add(searchLabel, 0, wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
     
     mSearchBox = new wxSearchCtrl(panel, ID_SEARCH_BOX, wxEmptyString, 
                                    wxDefaultPosition, wxSize(300, -1));
     mSearchBox->ShowCancelButton(true);
-    mSearchBox->SetDescriptiveText("Rechercher dans libellé ou montant...");
+    mSearchBox->SetDescriptiveText(_("Search in description or amount..."));
     searchSizer->Add(mSearchBox, 0, wxALIGN_CENTER_VERTICAL);
     
     mainSizer->Add(searchSizer, 0, wxALL, 5);
@@ -166,27 +174,27 @@ void MainFrame::CreateControls() {
     // Liste des transactions
     mTransactionList = new wxListCtrl(panel, ID_TRANSACTION_LIST, wxDefaultPosition,
                                        wxDefaultSize, wxLC_REPORT | wxLC_SINGLE_SEL);
-    mTransactionList->AppendColumn("Date", wxLIST_FORMAT_LEFT, 120);
-    mTransactionList->AppendColumn("Libellé", wxLIST_FORMAT_LEFT, 300);
-    mTransactionList->AppendColumn("Somme", wxLIST_FORMAT_RIGHT, 100);
-    mTransactionList->AppendColumn("Pointée", wxLIST_FORMAT_CENTER, 80);
-    mTransactionList->AppendColumn("Date pointée", wxLIST_FORMAT_LEFT, 120);
-    mTransactionList->AppendColumn("Type", wxLIST_FORMAT_LEFT, 120);
+    mTransactionList->AppendColumn(_("Date"), wxLIST_FORMAT_LEFT, 120);
+    mTransactionList->AppendColumn(_("Description"), wxLIST_FORMAT_LEFT, 300);
+    mTransactionList->AppendColumn(_("Amount"), wxLIST_FORMAT_RIGHT, 100);
+    mTransactionList->AppendColumn(_("Checked"), wxLIST_FORMAT_CENTER, 80);
+    mTransactionList->AppendColumn(_("Check Date"), wxLIST_FORMAT_LEFT, 120);
+    mTransactionList->AppendColumn(_("Type"), wxLIST_FORMAT_LEFT, 120);
 
     mainSizer->Add(mTransactionList, 1, wxALL | wxEXPAND, 5);
 
     // Panneau de résumé avec disposition horizontale
-    wxStaticBoxSizer* summarySizer = new wxStaticBoxSizer(wxHORIZONTAL, panel, "Résumé");
+    wxStaticBoxSizer* summarySizer = new wxStaticBoxSizer(wxHORIZONTAL, panel, _("Summary"));
     
     // Partie gauche (2x2)
     wxFlexGridSizer* leftGridSizer = new wxFlexGridSizer(2, 2, 5, 10);
     leftGridSizer->AddGrowableCol(1);
 
-    leftGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Restant:"), 0, wxALIGN_CENTER_VERTICAL);
+    leftGridSizer->Add(new wxStaticText(panel, wxID_ANY, _("Remaining:")), 0, wxALIGN_CENTER_VERTICAL);
     mRestantText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
     leftGridSizer->Add(mRestantText, 1, wxEXPAND);
 
-    leftGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Somme pointée:"), 0, wxALIGN_CENTER_VERTICAL);
+    leftGridSizer->Add(new wxStaticText(panel, wxID_ANY, _("Checked Total:")), 0, wxALIGN_CENTER_VERTICAL);
     mPointeeText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition, wxDefaultSize, wxTE_READONLY);
     leftGridSizer->Add(mPointeeText, 1, wxEXPAND);
 
@@ -196,11 +204,11 @@ void MainFrame::CreateControls() {
     wxFlexGridSizer* rightGridSizer = new wxFlexGridSizer(2, 2, 5, 10);
     rightGridSizer->AddGrowableCol(1);
 
-    rightGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Somme en ligne:"), 0, wxALIGN_CENTER_VERTICAL);
+    rightGridSizer->Add(new wxStaticText(panel, wxID_ANY, _("Online Balance:")), 0, wxALIGN_CENTER_VERTICAL);
     mSommeEnLigneText = new wxTextCtrl(panel, ID_SOMME_EN_LIGNE, "0.00");
     rightGridSizer->Add(mSommeEnLigneText, 1, wxEXPAND);
 
-    rightGridSizer->Add(new wxStaticText(panel, wxID_ANY, "Diff:"), 0, wxALIGN_CENTER_VERTICAL);
+    rightGridSizer->Add(new wxStaticText(panel, wxID_ANY, _("Difference:")), 0, wxALIGN_CENTER_VERTICAL);
     mDiffText = new wxTextCtrl(panel, wxID_ANY, "0.00", wxDefaultPosition,
                                 wxDefaultSize, wxTE_READONLY);
     rightGridSizer->Add(mDiffText, 1, wxEXPAND);
@@ -256,7 +264,7 @@ void MainFrame::LoadTransactions() {
         }
 
         mTransactionList->SetItem(index, 2, sommeStr);
-        mTransactionList->SetItem(index, 3, trans.IsPointee() ? "Oui" : "Non");
+        mTransactionList->SetItem(index, 3, trans.IsPointee() ? _("Yes") : _("No"));
 
         // Afficher la date pointée si elle existe
         if (trans.IsPointee() && trans.GetDatePointee().IsValid()) {
@@ -298,9 +306,9 @@ void MainFrame::OnInfo(wxCommandEvent& event) {
 void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     bool isEdit = (existingTransaction != nullptr);
     bool isReadOnly = isEdit && existingTransaction->IsPointee();
-    wxString dialogTitle = isReadOnly ? "Détails de la transaction (lecture seule)"
-                         : isEdit ? "Modifier une transaction"
-                         : "Ajouter une transaction";
+    wxString dialogTitle = isReadOnly ? _("Transaction Details (read-only)") 
+                         : isEdit ? _("Edit Transaction") 
+                         : _("Add Transaction");
 
     wxDialog dialog(this, wxID_ANY, dialogTitle, wxDefaultPosition, wxSize(400, 300));
 
@@ -318,8 +326,8 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     gridSizer->Add(datePicker, 1, wxEXPAND);
 
     // Libellé
-    gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, "Libellé:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxTextCtrl* libelleText = new wxTextCtrl(&dialog, wxID_ANY, "", wxDefaultPosition,
+    gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, _("Description:")), 0, wxALIGN_CENTER_VERTICAL);
+    wxTextCtrl* libelleText = new wxTextCtrl(&dialog, wxID_ANY, "", wxDefaultPosition, 
                                               wxDefaultSize, isReadOnly ? wxTE_READONLY : 0);
     if (isEdit) {
         libelleText->SetValue(existingTransaction->GetLibelle());
@@ -345,12 +353,14 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     gridSizer->Add(pointeeCheck, 1, wxEXPAND);
 
     // Type
-    gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, "Type:"), 0, wxALIGN_CENTER_VERTICAL);
+    gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, _("Type:")), 0, wxALIGN_CENTER_VERTICAL);
     wxChoice* typeChoice = new wxChoice(&dialog, wxID_ANY);
     auto types = mDatabase->GetAllTypes();
     int selectedIndex = 0;
     for (size_t i = 0; i < types.size(); ++i) {
-        wxString displayName = types[i].mNom + (types[i].mIsDepense ? " (Dépense)" : " (Recette)");
+        wxString displayName = types[i].mNom + (types[i].mIsDepense ? 
+            wxString(" (") + _("Expense") + ")" : 
+            wxString(" (") + _("Income") + ")");
         typeChoice->Append(displayName, new wxStringClientData(types[i].mNom));
 
         if (isEdit && types[i].mNom == existingTransaction->GetType()) {
@@ -366,19 +376,19 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     sizer->Add(gridSizer, 1, wxALL | wxEXPAND, 10);
 
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-
+    
     if (isReadOnly) {
         // Mode lecture seule : seulement un bouton Fermer
-        wxButton* closeBtn = new wxButton(&dialog, wxID_CANCEL, "Fermer");
+        wxButton* closeBtn = new wxButton(&dialog, wxID_CANCEL, _("Close"));
         buttonSizer->Add(closeBtn, 0, wxALL, 5);
     } else {
         // Mode édition : boutons OK et Annuler
-        wxButton* okBtn = new wxButton(&dialog, wxID_OK, "OK");
-        wxButton* cancelBtn = new wxButton(&dialog, wxID_CANCEL, "Annuler");
+        wxButton* okBtn = new wxButton(&dialog, wxID_OK, _("OK"));
+        wxButton* cancelBtn = new wxButton(&dialog, wxID_CANCEL, _("Cancel"));
         buttonSizer->Add(okBtn, 0, wxALL, 5);
         buttonSizer->Add(cancelBtn, 0, wxALL, 5);
     }
-
+    
     sizer->Add(buttonSizer, 0, wxALL | wxALIGN_CENTER, 5);
 
     dialog.SetSizer(sizer);
@@ -416,9 +426,9 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
             LoadTransactions();
             UpdateSummary();
         } else {
-            wxMessageBox(isEdit ? "Erreur lors de la modification de la transaction"
-                                : "Erreur lors de l'ajout de la transaction",
-                         "Erreur", wxOK | wxICON_ERROR);
+            wxMessageBox(isEdit ? _("Error updating transaction")
+                                : _("Error adding transaction"),
+                         _("Error"), wxOK | wxICON_ERROR);
         }
     }
 }
@@ -430,20 +440,20 @@ void MainFrame::OnAddTransaction(wxCommandEvent& event) {
 void MainFrame::OnDeleteTransaction(wxCommandEvent& event) {
     long selectedItem = mTransactionList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     if (selectedItem == -1) {
-        wxMessageBox("Veuillez sélectionner une transaction", "Information", wxOK | wxICON_INFORMATION);
+        wxMessageBox(_("Please select a transaction"), _("Information"), wxOK | wxICON_INFORMATION);
         return;
     }
 
     int transactionId = mTransactionList->GetItemData(selectedItem);
 
-    if (wxMessageBox("Êtes-vous sûr de vouloir supprimer cette transaction?",
-                     "Confirmation", wxYES_NO | wxICON_QUESTION) == wxYES) {
+    if (wxMessageBox(_("Are you sure you want to delete this transaction?"),
+                     _("Confirmation"), wxYES_NO | wxICON_QUESTION) == wxYES) {
         if (mDatabase->DeleteTransaction(transactionId)) {
             LoadTransactions();
             UpdateSummary();
         } else {
-            wxMessageBox("Erreur lors de la suppression",
-                         "Erreur", wxOK | wxICON_ERROR);
+            wxMessageBox(_("Error deleting transaction"),
+                         _("Error"), wxOK | wxICON_ERROR);
         }
     }
 }
@@ -461,7 +471,7 @@ void MainFrame::OnManageRecurring(wxCommandEvent& event) {
 void MainFrame::OnTogglePointee(wxCommandEvent& event) {
     long selectedItem = mTransactionList->GetNextItem(-1, wxLIST_NEXT_ALL, wxLIST_STATE_SELECTED);
     if (selectedItem == -1) {
-        wxMessageBox("Veuillez sélectionner une transaction", "Information", wxOK | wxICON_INFORMATION);
+        wxMessageBox(_("Please select a transaction"), _("Information"), wxOK | wxICON_INFORMATION);
         return;
     }
 
@@ -545,7 +555,7 @@ void MainFrame::OnTransactionRightClick(wxListEvent& event) {
 
     // Option Éditer (seulement si non pointée)
     if (!currentTransaction->IsPointee()) {
-        contextMenu.Append(wxID_EDIT, "Éditer");
+        contextMenu.Append(wxID_EDIT, _("Edit"));
         contextMenu.Bind(wxEVT_COMMAND_MENU_SELECTED, [this, currentTransaction](wxCommandEvent&) {
             ShowTransactionDialog(currentTransaction);
         }, wxID_EDIT);
@@ -553,16 +563,16 @@ void MainFrame::OnTransactionRightClick(wxListEvent& event) {
 
     // Option Pointer/Dépointer
     if (currentTransaction->IsPointee()) {
-        contextMenu.Append(ID_TOGGLE_POINTEE, "Dépointer");
+        contextMenu.Append(ID_TOGGLE_POINTEE, _("Uncheck"));
     } else {
-        contextMenu.Append(ID_TOGGLE_POINTEE, "Pointer");
+        contextMenu.Append(ID_TOGGLE_POINTEE, _("Check"));
     }
     contextMenu.Bind(wxEVT_COMMAND_MENU_SELECTED, &MainFrame::OnTogglePointee, this, ID_TOGGLE_POINTEE);
 
     contextMenu.AppendSeparator();
 
     // Option Supprimer
-    contextMenu.Append(ID_DELETE_TRANSACTION, "Supprimer");
+    contextMenu.Append(ID_DELETE_TRANSACTION, _("Delete"));
     contextMenu.Bind(wxEVT_COMMAND_MENU_SELECTED, &MainFrame::OnDeleteTransaction, this, ID_DELETE_TRANSACTION);
 
     // Afficher le menu à la position du curseur
@@ -685,54 +695,54 @@ void MainFrame::OnImportCSV(wxCommandEvent& event) {
 
 void MainFrame::OnExportCSV(wxCommandEvent& event) {
     // Dialogue de configuration de l'export
-    wxDialog configDialog(this, wxID_ANY, "Options d'export CSV",
+    wxDialog configDialog(this, wxID_ANY, _("CSV Export Options"), 
                          wxDefaultPosition, wxSize(450, 500));
-
+    
     wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
-
+    
     // Séparateur
-    wxStaticBoxSizer* separatorBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, "Séparateur");
-    wxRadioButton* radioSemicolon = new wxRadioButton(&configDialog, wxID_ANY,
-                                                      "Point-virgule (;)",
+    wxStaticBoxSizer* separatorBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, _("Separator"));
+    wxRadioButton* radioSemicolon = new wxRadioButton(&configDialog, wxID_ANY, 
+                                                      _("Semicolon (;)"), 
                                                       wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-    wxRadioButton* radioComma = new wxRadioButton(&configDialog, wxID_ANY, "Virgule (,)");
-    wxRadioButton* radioTab = new wxRadioButton(&configDialog, wxID_ANY, "Tabulation");
+    wxRadioButton* radioComma = new wxRadioButton(&configDialog, wxID_ANY, _("Comma (,)"));
+    wxRadioButton* radioTab = new wxRadioButton(&configDialog, wxID_ANY, _("Tab"));
     radioSemicolon->SetValue(true);
     separatorBox->Add(radioSemicolon, 0, wxALL, 5);
     separatorBox->Add(radioComma, 0, wxALL, 5);
     separatorBox->Add(radioTab, 0, wxALL, 5);
     mainSizer->Add(separatorBox, 0, wxALL | wxEXPAND, 10);
-
+    
     // Encodage
-    wxStaticBoxSizer* encodingBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, "Encodage");
-    wxRadioButton* radioUTF8 = new wxRadioButton(&configDialog, wxID_ANY,
-                                                 "UTF-8 (recommandé)",
+    wxStaticBoxSizer* encodingBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, _("Encoding"));
+    wxRadioButton* radioUTF8 = new wxRadioButton(&configDialog, wxID_ANY, 
+                                                 _("UTF-8 (recommended)"), 
                                                  wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-    wxRadioButton* radioLatin1 = new wxRadioButton(&configDialog, wxID_ANY, "ISO-8859-1 (Latin1)");
+    wxRadioButton* radioLatin1 = new wxRadioButton(&configDialog, wxID_ANY, _("ISO-8859-1 (Latin1)"));
     radioUTF8->SetValue(true);
     encodingBox->Add(radioUTF8, 0, wxALL, 5);
     encodingBox->Add(radioLatin1, 0, wxALL, 5);
     mainSizer->Add(encodingBox, 0, wxALL | wxEXPAND, 10);
-
+    
     // Format de date
-    wxStaticBoxSizer* dateBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, "Format de date");
-    wxRadioButton* radioDateDMY = new wxRadioButton(&configDialog, wxID_ANY,
-                                                    "JJ/MM/AAAA",
+    wxStaticBoxSizer* dateBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, _("Date Format"));
+    wxRadioButton* radioDateDMY = new wxRadioButton(&configDialog, wxID_ANY, 
+                                                    _("DD/MM/YYYY"), 
                                                     wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
-    wxRadioButton* radioDateYMD = new wxRadioButton(&configDialog, wxID_ANY, "AAAA-MM-JJ (ISO)");
-    wxRadioButton* radioDateMDY = new wxRadioButton(&configDialog, wxID_ANY, "MM/JJ/AAAA");
+    wxRadioButton* radioDateYMD = new wxRadioButton(&configDialog, wxID_ANY, _("YYYY-MM-DD (ISO)"));
+    wxRadioButton* radioDateMDY = new wxRadioButton(&configDialog, wxID_ANY, _("MM/DD/YYYY"));
     radioDateDMY->SetValue(true);
     dateBox->Add(radioDateDMY, 0, wxALL, 5);
     dateBox->Add(radioDateYMD, 0, wxALL, 5);
     dateBox->Add(radioDateMDY, 0, wxALL, 5);
     mainSizer->Add(dateBox, 0, wxALL | wxEXPAND, 10);
-
+    
     // Options supplémentaires
-    wxStaticBoxSizer* optionsBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, "Options");
-    wxCheckBox* checkHeader = new wxCheckBox(&configDialog, wxID_ANY, "Inclure les en-têtes de colonnes");
-    wxCheckBox* checkQuotes = new wxCheckBox(&configDialog, wxID_ANY, "Utiliser des guillemets pour les champs texte");
-    wxCheckBox* checkOnlyVisible = new wxCheckBox(&configDialog, wxID_ANY, "Exporter uniquement les transactions visibles");
-    wxCheckBox* checkSign = new wxCheckBox(&configDialog, wxID_ANY, "Inclure le signe +/- pour les montants");
+    wxStaticBoxSizer* optionsBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, _("Options"));
+    wxCheckBox* checkHeader = new wxCheckBox(&configDialog, wxID_ANY, _("Include column headers"));
+    wxCheckBox* checkQuotes = new wxCheckBox(&configDialog, wxID_ANY, _("Use quotes for text fields"));
+    wxCheckBox* checkOnlyVisible = new wxCheckBox(&configDialog, wxID_ANY, _("Export only visible transactions"));
+    wxCheckBox* checkSign = new wxCheckBox(&configDialog, wxID_ANY, _("Include +/- sign for amounts"));
     checkHeader->SetValue(true);
     checkQuotes->SetValue(true);
     checkOnlyVisible->SetValue(false);
@@ -742,60 +752,60 @@ void MainFrame::OnExportCSV(wxCommandEvent& event) {
     optionsBox->Add(checkOnlyVisible, 0, wxALL, 5);
     optionsBox->Add(checkSign, 0, wxALL, 5);
     mainSizer->Add(optionsBox, 0, wxALL | wxEXPAND, 10);
-
+    
     // Boutons
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    wxButton* okBtn = new wxButton(&configDialog, wxID_OK, "Exporter");
-    wxButton* cancelBtn = new wxButton(&configDialog, wxID_CANCEL, "Annuler");
+    wxButton* okBtn = new wxButton(&configDialog, wxID_OK, _("Export"));
+    wxButton* cancelBtn = new wxButton(&configDialog, wxID_CANCEL, _("Cancel"));
     buttonSizer->Add(okBtn, 0, wxALL, 5);
     buttonSizer->Add(cancelBtn, 0, wxALL, 5);
     mainSizer->Add(buttonSizer, 0, wxALL | wxALIGN_CENTER, 10);
-
+    
     configDialog.SetSizer(mainSizer);
-
+    
     if (configDialog.ShowModal() != wxID_OK) {
         return;
     }
-
+    
     // Récupérer les options choisies
     char separator = ';';
     if (radioComma->GetValue()) separator = ',';
     else if (radioTab->GetValue()) separator = '\t';
-
+    
     wxString dateFormat = "%d/%m/%Y";
     if (radioDateYMD->GetValue()) dateFormat = "%Y-%m-%d";
     else if (radioDateMDY->GetValue()) dateFormat = "%m/%d/%Y";
-
+    
     bool includeHeader = checkHeader->GetValue();
     bool useQuotes = checkQuotes->GetValue();
     bool onlyVisible = checkOnlyVisible->GetValue();
     bool includeSign = checkSign->GetValue();
     bool useUTF8 = radioUTF8->GetValue();
-
+    
     // Demander où sauvegarder le fichier
-    wxFileDialog saveFileDialog(this, "Exporter en CSV", "",
+    wxFileDialog saveFileDialog(this, _("Export to CSV"), "", 
                                "export_transactions.csv",
-                               "Fichiers CSV (*.csv)|*.csv",
+                               _("CSV files (*.csv)|*.csv"),
                                wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
-
+    
     if (saveFileDialog.ShowModal() == wxID_CANCEL) {
         return;
     }
-
+    
     wxString filePath = saveFileDialog.GetPath();
-
+    
     try {
         std::ofstream csvFile(filePath.ToStdString());
         if (!csvFile.is_open()) {
-            wxMessageBox("Impossible de créer le fichier CSV",
-                        "Erreur", wxOK | wxICON_ERROR);
+            wxMessageBox(_("Unable to create CSV file"), 
+                        _("Error"), wxOK | wxICON_ERROR);
             return;
         }
-
+        
         // Helper pour échapper les champs si nécessaire
         auto escapeField = [useQuotes, separator](const wxString& field) -> std::string {
             std::string result = field.ToStdString();
-            if (useQuotes || result.find(separator) != std::string::npos ||
+            if (useQuotes || result.find(separator) != std::string::npos || 
                 result.find('"') != std::string::npos || result.find('\n') != std::string::npos) {
                 // Doubler les guillemets existants
                 size_t pos = 0;
@@ -807,17 +817,17 @@ void MainFrame::OnExportCSV(wxCommandEvent& event) {
             }
             return result;
         };
-
+        
         // Écrire l'en-tête si demandé
         if (includeHeader) {
-            csvFile << escapeField("Date") << separator
-                   << escapeField("Libellé") << separator
-                   << escapeField("Montant") << separator
-                   << escapeField("Type") << separator
-                   << escapeField("Pointée") << separator
-                   << escapeField("Date pointée") << "\n";
+            csvFile << escapeField(_("Date")) << separator
+                   << escapeField(_("Description")) << separator
+                   << escapeField(_("Amount")) << separator
+                   << escapeField(_("Type")) << separator
+                   << escapeField(_("Checked")) << separator
+                   << escapeField(_("Check Date")) << "\n";
         }
-
+        
         // Choisir les transactions à exporter
         std::vector<Transaction> transactionsToExport;
         if (onlyVisible) {
@@ -830,18 +840,18 @@ void MainFrame::OnExportCSV(wxCommandEvent& event) {
                     return a.GetDate() < b.GetDate();
                 });
         }
-
+        
         Settings& settings = Settings::GetInstance();
-
+        
         // Écrire les transactions
         for (const auto& trans : transactionsToExport) {
             // Date
             wxString dateStr = trans.GetDate().Format(dateFormat);
             csvFile << escapeField(dateStr) << separator;
-
+            
             // Libellé
             csvFile << escapeField(trans.GetLibelle()) << separator;
-
+            
             // Montant
             wxString montantStr;
             bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
@@ -854,33 +864,31 @@ void MainFrame::OnExportCSV(wxCommandEvent& event) {
                 }
             }
             csvFile << escapeField(montantStr) << separator;
-
+            
             // Type
             csvFile << escapeField(trans.GetType()) << separator;
-
+            
             // Pointée
-            csvFile << escapeField(trans.IsPointee() ? "Oui" : "Non") << separator;
-
+            csvFile << escapeField(trans.IsPointee() ? _("Yes") : _("No")) << separator;
+            
             // Date pointée
             if (trans.IsPointee() && trans.GetDatePointee().IsValid()) {
                 wxString datePointeeStr = trans.GetDatePointee().Format(dateFormat);
                 csvFile << escapeField(datePointeeStr);
             }
-
+            
             csvFile << "\n";
         }
-
+        
         csvFile.close();
-
-        wxMessageBox(wxString::Format("Export CSV réussi!\n\n"
-                                      "Fichier: %s\n"
-                                      "Transactions exportées: %zu",
+        
+        wxMessageBox(wxString::Format(_("CSV export successful!\n\nFile: %s\nTransactions exported: %zu"),
                                       filePath, transactionsToExport.size()),
-                    "Export réussi", wxOK | wxICON_INFORMATION);
-
+                    _("Success"), wxOK | wxICON_INFORMATION);
+        
     } catch (const std::exception& e) {
-        wxMessageBox(wxString::Format("Erreur lors de l'export: %s", e.what()),
-                    "Erreur", wxOK | wxICON_ERROR);
+        wxMessageBox(wxString::Format(_("Export error: %s"), e.what()),
+                    _("Error"), wxOK | wxICON_ERROR);
     }
 }
 
@@ -996,12 +1004,12 @@ void MainFrame::SortTransactions(int column) {
 void MainFrame::UpdateColumnHeaders() {
     // Titres de colonnes de base
     wxString columnTitles[] = {
-        "Date",
-        "Libellé",
-        "Somme",
-        "Pointée",
-        "Date pointée",
-        "Type"
+        _("Date"),
+        _("Description"),
+        _("Amount"),
+        _("Checked"),
+        _("Check Date"),
+        _("Type")
     };
 
     // Mettre à jour chaque colonne
@@ -1029,8 +1037,8 @@ void MainFrame::OnSearchChanged(wxCommandEvent& event) {
 void MainFrame::OnRapprochement(wxCommandEvent& event) {
     if (mRapprochementMode) {
         // Sortir du mode rapprochement
-        if (wxMessageBox("Voulez-vous quitter le mode rapprochement?",
-                        "Confirmation", wxYES_NO | wxICON_QUESTION) == wxYES) {
+        if (wxMessageBox(_("Do you want to exit reconciliation mode?"),
+                        _("Confirmation"), wxYES_NO | wxICON_QUESTION) == wxYES) {
             ExitRapprochementMode();
         }
     } else {
@@ -1042,8 +1050,8 @@ void MainFrame::OnRapprochement(wxCommandEvent& event) {
 void MainFrame::EnterRapprochementMode() {
     // Dialogue pour saisir le solde en ligne
     wxTextEntryDialog dialog(this,
-                            "Entrez le solde indiqué sur votre relevé bancaire:",
-                            "Rapprochement bancaire",
+                            _("Enter the balance shown on your bank statement:"),
+                            _("Bank Reconciliation"),
                             wxString::Format("%.2f", mSommeEnLigne));
 
     if (dialog.ShowModal() != wxID_OK) {
@@ -1052,7 +1060,7 @@ void MainFrame::EnterRapprochementMode() {
 
     double solde;
     if (!dialog.GetValue().ToDouble(&solde)) {
-        wxMessageBox("Valeur invalide", "Erreur", wxOK | wxICON_ERROR);
+        wxMessageBox(_("Invalid value"), _("Error"), wxOK | wxICON_ERROR);
         return;
     }
 
@@ -1067,19 +1075,17 @@ void MainFrame::EnterRapprochementMode() {
     GetMenuBar()->Enable(ID_HIDE_POINTEES, false);
 
     // Modifier le titre de la fenêtre
-    SetTitle("Mes Comptes - Mode Rapprochement");
+    SetTitle(_("My Accounts - Reconciliation Mode"));
 
     // Changer le label du menu
-    GetMenuBar()->SetLabel(ID_RAPPROCHEMENT, "&Quitter le rapprochement\tCtrl-R");
+    GetMenuBar()->SetLabel(ID_RAPPROCHEMENT, _("&Exit Reconciliation\tCtrl-R"));
 
     // Recharger les transactions (affichera uniquement les non pointées avec checkboxes)
     LoadTransactions();
     UpdateSummary();
 
-    wxMessageBox("Mode rapprochement activé.\n\n"
-                "Cochez les transactions qui apparaissent sur votre relevé bancaire.\n"
-                "Seules les transactions non pointées sont affichées.",
-                "Information", wxOK | wxICON_INFORMATION);
+    wxMessageBox(_("Reconciliation mode enabled.\n\nCheck the transactions that appear on your bank statement.\nOnly unchecked transactions are displayed."),
+                _("Information"), wxOK | wxICON_INFORMATION);
 }
 
 void MainFrame::ExitRapprochementMode() {
@@ -1089,10 +1095,10 @@ void MainFrame::ExitRapprochementMode() {
     GetMenuBar()->Enable(ID_HIDE_POINTEES, true);
 
     // Restaurer le titre de la fenêtre
-    SetTitle("Mes Comptes");
+    SetTitle(_("My Accounts"));
 
     // Restaurer le label du menu
-    GetMenuBar()->SetLabel(ID_RAPPROCHEMENT, "&Rapprochement bancaire\tCtrl-R");
+    GetMenuBar()->SetLabel(ID_RAPPROCHEMENT, _("&Bank Reconciliation\tCtrl-R"));
 
     // Recharger les transactions (affichera toutes les transactions sans checkboxes)
     LoadTransactions();
@@ -1136,9 +1142,9 @@ void MainFrame::OnToggleHidePointees(wxCommandEvent& event) {
     
     // Afficher un message informatif
     if (mHidePointees) {
-        SetStatusText("Transactions pointées masquées");
+        SetStatusText(_("Checked transactions hidden"));
     } else {
-        SetStatusText("Toutes les transactions affichées");
+        SetStatusText(_("All transactions displayed"));
     }
 }
 
@@ -1200,9 +1206,9 @@ void MainFrame::OnUpdateToggleHidePointees(wxUpdateUIEvent& event) {
 
 void MainFrame::OnBackup(wxCommandEvent& event) {
     // Demander à l'utilisateur où sauvegarder le fichier
-    wxFileDialog saveFileDialog(this, "Sauvegarder le compte", "",
+    wxFileDialog saveFileDialog(this, _("Backup Account"), "", 
                                 "sauvegarde_compte.zip",
-                                "Fichiers ZIP (*.zip)|*.zip",
+                                _("ZIP files (*.zip)|*.zip"),
                                 wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
 
     if (saveFileDialog.ShowModal() == wxID_CANCEL) {
@@ -1219,8 +1225,8 @@ void MainFrame::OnBackup(wxCommandEvent& event) {
         // Créer le fichier texte de sauvegarde
         std::ofstream textFile(txtPath.ToStdString());
         if (!textFile.is_open()) {
-            wxMessageBox("Impossible de créer le fichier de sauvegarde",
-                        "Erreur", wxOK | wxICON_ERROR);
+            wxMessageBox(_("Unable to create backup file"), 
+                        _("Error"), wxOK | wxICON_ERROR);
             return;
         }
 
@@ -1254,7 +1260,7 @@ void MainFrame::OnBackup(wxCommandEvent& event) {
         textFile << "---------------------\n";
         auto types = mDatabase->GetAllTypes();
         for (const auto& type : types) {
-            textFile << "- " << type.mNom << " ("
+            textFile << "- " << type.mNom << " (" 
                     << (type.mIsDepense ? "Dépense" : "Recette") << ")\n";
         }
         textFile << "\n\n";
@@ -1267,18 +1273,18 @@ void MainFrame::OnBackup(wxCommandEvent& event) {
             textFile << "Transaction #" << trans.GetId() << "\n";
             textFile << "  Date         : " << settings.FormatDate(trans.GetDate()).ToStdString() << "\n";
             textFile << "  Libellé      : " << trans.GetLibelle() << "\n";
-
+            
             bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
-            textFile << "  Somme        : " << (isDepense ? "-" : "+")
+            textFile << "  Somme        : " << (isDepense ? "-" : "+") 
                     << settings.FormatMoney(trans.GetSomme()).ToStdString() << " €\n";
-
+            
             textFile << "  Type         : " << trans.GetType() << "\n";
             textFile << "  Pointée      : " << (trans.IsPointee() ? "Oui" : "Non") << "\n";
-
+            
             if (trans.IsPointee() && trans.GetDatePointee().IsValid()) {
                 textFile << "  Date pointée : " << settings.FormatDate(trans.GetDatePointee()).ToStdString() << "\n";
             }
-
+            
             textFile << "\n";
         }
 
@@ -1291,16 +1297,16 @@ void MainFrame::OnBackup(wxCommandEvent& event) {
         // Compresser le fichier texte dans un ZIP
         wxFileOutputStream out(zipPath);
         if (!out.IsOk()) {
-            wxMessageBox("Impossible de créer le fichier ZIP",
-                        "Erreur", wxOK | wxICON_ERROR);
+            wxMessageBox(_("Unable to create backup file"), 
+                        _("Error"), wxOK | wxICON_ERROR);
             wxRemoveFile(txtPath);
             return;
         }
 
         wxZipOutputStream zip(out);
         if (!zip.IsOk()) {
-            wxMessageBox("Erreur lors de la création de l'archive ZIP",
-                        "Erreur", wxOK | wxICON_ERROR);
+            wxMessageBox(_("Unable to create backup file"), 
+                        _("Error"), wxOK | wxICON_ERROR);
             wxRemoveFile(txtPath);
             return;
         }
@@ -1308,8 +1314,8 @@ void MainFrame::OnBackup(wxCommandEvent& event) {
         // Ajouter le fichier texte au ZIP
         wxFileInputStream in(txtPath);
         if (!in.IsOk()) {
-            wxMessageBox("Impossible de lire le fichier texte",
-                        "Erreur", wxOK | wxICON_ERROR);
+            wxMessageBox(_("Unable to create backup file"), 
+                        _("Error"), wxOK | wxICON_ERROR);
             wxRemoveFile(txtPath);
             return;
         }
@@ -1325,15 +1331,13 @@ void MainFrame::OnBackup(wxCommandEvent& event) {
         // Supprimer le fichier texte temporaire
         wxRemoveFile(txtPath);
 
-        wxMessageBox(wxString::Format("Sauvegarde créée avec succès!\n\n"
-                                      "Fichier: %s\n"
-                                      "Transactions: %zu",
+        wxMessageBox(wxString::Format(_("Backup created successfully!\n\nFile: %s\nTransactions: %zu"),
                                       zipPath, allTransactions.size()),
-                    "Sauvegarde réussie", wxOK | wxICON_INFORMATION);
+                    _("Backup successful"), wxOK | wxICON_INFORMATION);
 
     } catch (const std::exception& e) {
-        wxMessageBox(wxString::Format("Erreur lors de la sauvegarde: %s", e.what()),
-                    "Erreur", wxOK | wxICON_ERROR);
+        wxMessageBox(wxString::Format(_("Export error: %s"), e.what()),
+                    _("Error"), wxOK | wxICON_ERROR);
         // Nettoyer les fichiers temporaires
         if (wxFileExists(txtPath)) {
             wxRemoveFile(txtPath);
