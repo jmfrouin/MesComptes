@@ -24,6 +24,7 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(ID_PREFERENCES, MainFrame::OnPreferences)
     EVT_MENU(ID_INFO, MainFrame::OnInfo)
     EVT_MENU(ID_IMPORT_CSV, MainFrame::OnImportCSV)
+    EVT_MENU(ID_EXPORT_CSV, MainFrame::OnExportCSV)
     EVT_MENU(ID_BACKUP, MainFrame::OnBackup)
     EVT_MENU(wxID_ABOUT, MainFrame::OnAbout)
     EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
@@ -82,8 +83,13 @@ void MainFrame::CreateMenuBar() {
     menuFile->Append(ID_ADD_TRANSACTION, "&Nouvelle transaction\tCtrl-N",
                      "Ajouter une nouvelle transaction");
     menuFile->AppendSeparator();
-    menuFile->Append(ID_IMPORT_CSV, "&Importer depuis CSV\tCtrl-I",
-                     "Importer des transactions depuis un fichier CSV");
+    wxMenu* menuImportExport = new wxMenu;
+    menuImportExport->Append(ID_IMPORT_CSV, "&Importer depuis CSV\tCtrl-I",
+                            "Importer des transactions depuis un fichier CSV");
+    menuImportExport->Append(ID_EXPORT_CSV, "&Exporter en CSV\tCtrl-E",
+                            "Exporter les transactions en fichier CSV");
+    menuFile->AppendSubMenu(menuImportExport, "&Import/Export",
+                           "Importer ou exporter des données");
     menuFile->AppendSeparator();
     menuFile->Append(ID_BACKUP, "&Sauvegarder le compte\tCtrl-S",
                      "Créer une sauvegarde du compte au format texte compressé");
@@ -674,6 +680,207 @@ void MainFrame::OnImportCSV(wxCommandEvent& event) {
                     "Attention", wxOK | wxICON_WARNING);
         LoadTransactions();
         UpdateSummary();
+    }
+}
+
+void MainFrame::OnExportCSV(wxCommandEvent& event) {
+    // Dialogue de configuration de l'export
+    wxDialog configDialog(this, wxID_ANY, "Options d'export CSV",
+                         wxDefaultPosition, wxSize(450, 500));
+
+    wxBoxSizer* mainSizer = new wxBoxSizer(wxVERTICAL);
+
+    // Séparateur
+    wxStaticBoxSizer* separatorBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, "Séparateur");
+    wxRadioButton* radioSemicolon = new wxRadioButton(&configDialog, wxID_ANY,
+                                                      "Point-virgule (;)",
+                                                      wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+    wxRadioButton* radioComma = new wxRadioButton(&configDialog, wxID_ANY, "Virgule (,)");
+    wxRadioButton* radioTab = new wxRadioButton(&configDialog, wxID_ANY, "Tabulation");
+    radioSemicolon->SetValue(true);
+    separatorBox->Add(radioSemicolon, 0, wxALL, 5);
+    separatorBox->Add(radioComma, 0, wxALL, 5);
+    separatorBox->Add(radioTab, 0, wxALL, 5);
+    mainSizer->Add(separatorBox, 0, wxALL | wxEXPAND, 10);
+
+    // Encodage
+    wxStaticBoxSizer* encodingBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, "Encodage");
+    wxRadioButton* radioUTF8 = new wxRadioButton(&configDialog, wxID_ANY,
+                                                 "UTF-8 (recommandé)",
+                                                 wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+    wxRadioButton* radioLatin1 = new wxRadioButton(&configDialog, wxID_ANY, "ISO-8859-1 (Latin1)");
+    radioUTF8->SetValue(true);
+    encodingBox->Add(radioUTF8, 0, wxALL, 5);
+    encodingBox->Add(radioLatin1, 0, wxALL, 5);
+    mainSizer->Add(encodingBox, 0, wxALL | wxEXPAND, 10);
+
+    // Format de date
+    wxStaticBoxSizer* dateBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, "Format de date");
+    wxRadioButton* radioDateDMY = new wxRadioButton(&configDialog, wxID_ANY,
+                                                    "JJ/MM/AAAA",
+                                                    wxDefaultPosition, wxDefaultSize, wxRB_GROUP);
+    wxRadioButton* radioDateYMD = new wxRadioButton(&configDialog, wxID_ANY, "AAAA-MM-JJ (ISO)");
+    wxRadioButton* radioDateMDY = new wxRadioButton(&configDialog, wxID_ANY, "MM/JJ/AAAA");
+    radioDateDMY->SetValue(true);
+    dateBox->Add(radioDateDMY, 0, wxALL, 5);
+    dateBox->Add(radioDateYMD, 0, wxALL, 5);
+    dateBox->Add(radioDateMDY, 0, wxALL, 5);
+    mainSizer->Add(dateBox, 0, wxALL | wxEXPAND, 10);
+
+    // Options supplémentaires
+    wxStaticBoxSizer* optionsBox = new wxStaticBoxSizer(wxVERTICAL, &configDialog, "Options");
+    wxCheckBox* checkHeader = new wxCheckBox(&configDialog, wxID_ANY, "Inclure les en-têtes de colonnes");
+    wxCheckBox* checkQuotes = new wxCheckBox(&configDialog, wxID_ANY, "Utiliser des guillemets pour les champs texte");
+    wxCheckBox* checkOnlyVisible = new wxCheckBox(&configDialog, wxID_ANY, "Exporter uniquement les transactions visibles");
+    wxCheckBox* checkSign = new wxCheckBox(&configDialog, wxID_ANY, "Inclure le signe +/- pour les montants");
+    checkHeader->SetValue(true);
+    checkQuotes->SetValue(true);
+    checkOnlyVisible->SetValue(false);
+    checkSign->SetValue(false);
+    optionsBox->Add(checkHeader, 0, wxALL, 5);
+    optionsBox->Add(checkQuotes, 0, wxALL, 5);
+    optionsBox->Add(checkOnlyVisible, 0, wxALL, 5);
+    optionsBox->Add(checkSign, 0, wxALL, 5);
+    mainSizer->Add(optionsBox, 0, wxALL | wxEXPAND, 10);
+
+    // Boutons
+    wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
+    wxButton* okBtn = new wxButton(&configDialog, wxID_OK, "Exporter");
+    wxButton* cancelBtn = new wxButton(&configDialog, wxID_CANCEL, "Annuler");
+    buttonSizer->Add(okBtn, 0, wxALL, 5);
+    buttonSizer->Add(cancelBtn, 0, wxALL, 5);
+    mainSizer->Add(buttonSizer, 0, wxALL | wxALIGN_CENTER, 10);
+
+    configDialog.SetSizer(mainSizer);
+
+    if (configDialog.ShowModal() != wxID_OK) {
+        return;
+    }
+
+    // Récupérer les options choisies
+    char separator = ';';
+    if (radioComma->GetValue()) separator = ',';
+    else if (radioTab->GetValue()) separator = '\t';
+
+    wxString dateFormat = "%d/%m/%Y";
+    if (radioDateYMD->GetValue()) dateFormat = "%Y-%m-%d";
+    else if (radioDateMDY->GetValue()) dateFormat = "%m/%d/%Y";
+
+    bool includeHeader = checkHeader->GetValue();
+    bool useQuotes = checkQuotes->GetValue();
+    bool onlyVisible = checkOnlyVisible->GetValue();
+    bool includeSign = checkSign->GetValue();
+    bool useUTF8 = radioUTF8->GetValue();
+
+    // Demander où sauvegarder le fichier
+    wxFileDialog saveFileDialog(this, "Exporter en CSV", "",
+                               "export_transactions.csv",
+                               "Fichiers CSV (*.csv)|*.csv",
+                               wxFD_SAVE | wxFD_OVERWRITE_PROMPT);
+
+    if (saveFileDialog.ShowModal() == wxID_CANCEL) {
+        return;
+    }
+
+    wxString filePath = saveFileDialog.GetPath();
+
+    try {
+        std::ofstream csvFile(filePath.ToStdString());
+        if (!csvFile.is_open()) {
+            wxMessageBox("Impossible de créer le fichier CSV",
+                        "Erreur", wxOK | wxICON_ERROR);
+            return;
+        }
+
+        // Helper pour échapper les champs si nécessaire
+        auto escapeField = [useQuotes, separator](const wxString& field) -> std::string {
+            std::string result = field.ToStdString();
+            if (useQuotes || result.find(separator) != std::string::npos ||
+                result.find('"') != std::string::npos || result.find('\n') != std::string::npos) {
+                // Doubler les guillemets existants
+                size_t pos = 0;
+                while ((pos = result.find('"', pos)) != std::string::npos) {
+                    result.insert(pos, "\"");
+                    pos += 2;
+                }
+                result = "\"" + result + "\"";
+            }
+            return result;
+        };
+
+        // Écrire l'en-tête si demandé
+        if (includeHeader) {
+            csvFile << escapeField("Date") << separator
+                   << escapeField("Libellé") << separator
+                   << escapeField("Montant") << separator
+                   << escapeField("Type") << separator
+                   << escapeField("Pointée") << separator
+                   << escapeField("Date pointée") << "\n";
+        }
+
+        // Choisir les transactions à exporter
+        std::vector<Transaction> transactionsToExport;
+        if (onlyVisible) {
+            transactionsToExport = mCachedTransactions;
+        } else {
+            transactionsToExport = mDatabase->GetAllTransactions();
+            // Trier par date
+            std::sort(transactionsToExport.begin(), transactionsToExport.end(),
+                [](const Transaction& a, const Transaction& b) {
+                    return a.GetDate() < b.GetDate();
+                });
+        }
+
+        Settings& settings = Settings::GetInstance();
+
+        // Écrire les transactions
+        for (const auto& trans : transactionsToExport) {
+            // Date
+            wxString dateStr = trans.GetDate().Format(dateFormat);
+            csvFile << escapeField(dateStr) << separator;
+
+            // Libellé
+            csvFile << escapeField(trans.GetLibelle()) << separator;
+
+            // Montant
+            wxString montantStr;
+            bool isDepense = mDatabase->IsTypeDepense(trans.GetType());
+            if (includeSign) {
+                montantStr = (isDepense ? "-" : "+") + settings.FormatMoney(trans.GetSomme());
+            } else {
+                montantStr = settings.FormatMoney(trans.GetSomme());
+                if (isDepense) {
+                    montantStr = "-" + montantStr;
+                }
+            }
+            csvFile << escapeField(montantStr) << separator;
+
+            // Type
+            csvFile << escapeField(trans.GetType()) << separator;
+
+            // Pointée
+            csvFile << escapeField(trans.IsPointee() ? "Oui" : "Non") << separator;
+
+            // Date pointée
+            if (trans.IsPointee() && trans.GetDatePointee().IsValid()) {
+                wxString datePointeeStr = trans.GetDatePointee().Format(dateFormat);
+                csvFile << escapeField(datePointeeStr);
+            }
+
+            csvFile << "\n";
+        }
+
+        csvFile.close();
+
+        wxMessageBox(wxString::Format("Export CSV réussi!\n\n"
+                                      "Fichier: %s\n"
+                                      "Transactions exportées: %zu",
+                                      filePath, transactionsToExport.size()),
+                    "Export réussi", wxOK | wxICON_INFORMATION);
+
+    } catch (const std::exception& e) {
+        wxMessageBox(wxString::Format("Erreur lors de l'export: %s", e.what()),
+                    "Erreur", wxOK | wxICON_ERROR);
     }
 }
 
