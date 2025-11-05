@@ -2,12 +2,12 @@
 
 #define MESCOMPTES_VERSION_MAJOR 0
 #define MESCOMPTES_VERSION_MINOR 1
-#define MESCOMPTES_VERSION_PATCH 113
-#define MESCOMPTES_VERSION_STRING "0.1.113"
+#define MESCOMPTES_VERSION_PATCH 117
+#define MESCOMPTES_VERSION_STRING "0.1.117"
 
 namespace MESCOMPTES {
     constexpr int VERSION_MAJOR = 0;
     constexpr int VERSION_MINOR = 1;
-    constexpr int VERSION_PATCH = 113;
-    constexpr const char* VERSION_STRING = "0.1.113";
+    constexpr int VERSION_PATCH = 117;
+    constexpr const char* VERSION_STRING = "0.1.117";
 }

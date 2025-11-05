@@ -26,12 +26,13 @@ wxBEGIN_EVENT_TABLE(MainFrame, wxFrame)
     EVT_MENU(ID_ADD_TRANSACTION, MainFrame::OnAddTransaction)
     EVT_MENU(ID_RAPPROCHEMENT, MainFrame::OnRapprochement)
     EVT_MENU(ID_HIDE_POINTEES, MainFrame::OnToggleHidePointees)
-    EVT_MENU(ID_MANAGE_RECURRING, MainFrame::OnManageRecurring)  // NOUVEAU
+    EVT_MENU(ID_MANAGE_RECURRING, MainFrame::OnManageRecurring)
     EVT_UPDATE_UI(ID_HIDE_POINTEES, MainFrame::OnUpdateToggleHidePointees)
     EVT_LIST_ITEM_RIGHT_CLICK(ID_TRANSACTION_LIST, MainFrame::OnTransactionRightClick)
     EVT_LIST_COL_CLICK(ID_TRANSACTION_LIST, MainFrame::OnColumnClick)
     EVT_LIST_ITEM_CHECKED(ID_TRANSACTION_LIST, MainFrame::OnRapprochementItemChecked)
     EVT_LIST_ITEM_UNCHECKED(ID_TRANSACTION_LIST, MainFrame::OnRapprochementItemChecked)
+    EVT_LIST_ITEM_ACTIVATED(ID_TRANSACTION_LIST, MainFrame::OnTransactionDoubleClick)
 wxEND_EVENT_TABLE()
 
 MainFrame::MainFrame(const wxString& title)
@@ -284,7 +285,10 @@ void MainFrame::OnInfo(wxCommandEvent& event) {
 
 void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     bool isEdit = (existingTransaction != nullptr);
-    wxString dialogTitle = isEdit ? "Modifier une transaction" : "Ajouter une transaction";
+    bool isReadOnly = isEdit && existingTransaction->IsPointee();
+    wxString dialogTitle = isReadOnly ? "Détails de la transaction (lecture seule)"
+                         : isEdit ? "Modifier une transaction"
+                         : "Ajouter une transaction";
 
     wxDialog dialog(this, wxID_ANY, dialogTitle, wxDefaultPosition, wxSize(400, 300));
 
@@ -298,11 +302,13 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     if (isEdit) {
         datePicker->SetValue(existingTransaction->GetDate());
     }
+    datePicker->Enable(!isReadOnly);
     gridSizer->Add(datePicker, 1, wxEXPAND);
 
     // Libellé
     gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, "Libellé:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxTextCtrl* libelleText = new wxTextCtrl(&dialog, wxID_ANY);
+    wxTextCtrl* libelleText = new wxTextCtrl(&dialog, wxID_ANY, "", wxDefaultPosition,
+                                              wxDefaultSize, isReadOnly ? wxTE_READONLY : 0);
     if (isEdit) {
         libelleText->SetValue(existingTransaction->GetLibelle());
     }
@@ -310,7 +316,8 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
 
     // Somme
     gridSizer->Add(new wxStaticText(&dialog, wxID_ANY, "Somme:"), 0, wxALIGN_CENTER_VERTICAL);
-    wxTextCtrl* sommeText = new wxTextCtrl(&dialog, wxID_ANY);
+    wxTextCtrl* sommeText = new wxTextCtrl(&dialog, wxID_ANY, "", wxDefaultPosition,
+                                            wxDefaultSize, isReadOnly ? wxTE_READONLY : 0);
     if (isEdit) {
         sommeText->SetValue(wxString::Format("%.2f", existingTransaction->GetSomme()));
     }
@@ -322,6 +329,7 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     if (isEdit) {
         pointeeCheck->SetValue(existingTransaction->IsPointee());
     }
+    pointeeCheck->Enable(!isReadOnly);
     gridSizer->Add(pointeeCheck, 1, wxEXPAND);
 
     // Type
@@ -340,20 +348,30 @@ void MainFrame::ShowTransactionDialog(Transaction* existingTransaction) {
     if (!types.empty()) {
         typeChoice->SetSelection(selectedIndex);
     }
+    typeChoice->Enable(!isReadOnly);
     gridSizer->Add(typeChoice, 1, wxEXPAND);
 
     sizer->Add(gridSizer, 1, wxALL | wxEXPAND, 10);
 
     wxBoxSizer* buttonSizer = new wxBoxSizer(wxHORIZONTAL);
-    wxButton* okBtn = new wxButton(&dialog, wxID_OK, "OK");
-    wxButton* cancelBtn = new wxButton(&dialog, wxID_CANCEL, "Annuler");
-    buttonSizer->Add(okBtn, 0, wxALL, 5);
-    buttonSizer->Add(cancelBtn, 0, wxALL, 5);
+
+    if (isReadOnly) {
+        // Mode lecture seule : seulement un bouton Fermer
+        wxButton* closeBtn = new wxButton(&dialog, wxID_CANCEL, "Fermer");
+        buttonSizer->Add(closeBtn, 0, wxALL, 5);
+    } else {
+        // Mode édition : boutons OK et Annuler
+        wxButton* okBtn = new wxButton(&dialog, wxID_OK, "OK");
+        wxButton* cancelBtn = new wxButton(&dialog, wxID_CANCEL, "Annuler");
+        buttonSizer->Add(okBtn, 0, wxALL, 5);
+        buttonSizer->Add(cancelBtn, 0, wxALL, 5);
+    }
+
     sizer->Add(buttonSizer, 0, wxALL | wxALIGN_CENTER, 5);
 
     dialog.SetSizer(sizer);
 
-    if (dialog.ShowModal() == wxID_OK) {
+    if (dialog.ShowModal() == wxID_OK && !isReadOnly) {
         Transaction trans;
         if (isEdit) {
             trans.SetId(existingTransaction->GetId());
@@ -477,7 +495,7 @@ void MainFrame::OnTransactionDoubleClick(wxListEvent& event) {
     auto transactions = mDatabase->GetAllTransactions();
 
     for (auto& trans : transactions) {
-        if (trans.GetId() == transactionId && !trans.IsPointee()) {
+        if (trans.GetId() == transactionId) {
             ShowTransactionDialog(&trans);
             break;
         }
